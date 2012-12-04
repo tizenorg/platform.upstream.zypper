@@ -7,7 +7,7 @@ BuildRequires:  augeas-devel >= 0.5.0
 BuildRequires:  gcc-c++ >= 4.5
 BuildRequires:  cmake >= 2.4.6
 Requires:       procps
-Requires:    libzypp
+Requires:       libzypp
 License:        GPL-2.0+
 Group:          System/Packages
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
@@ -86,6 +86,7 @@ touch $RPM_BUILD_ROOT%{_var}/log/zypper.log
 rm -rf "$RPM_BUILD_ROOT"
 
 %files -f zypper.lang
+%license COPYING
 %defattr(-,root,root)
 %config(noreplace) %{_sysconfdir}/zypp/zypper.conf
 %config(noreplace) %{_sysconfdir}/logrotate.d/zypper.lr
