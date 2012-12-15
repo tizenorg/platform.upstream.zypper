@@ -82,10 +82,9 @@ cd ..
 %{__install} -d -m755 $RPM_BUILD_ROOT%{_var}/log
 touch $RPM_BUILD_ROOT%{_var}/log/zypper.log
 
-%clean
-rm -rf "$RPM_BUILD_ROOT"
+%lang_package
 
-%files -f zypper.lang
+%files 
 %license COPYING
 %defattr(-,root,root)
 %config(noreplace) %{_sysconfdir}/zypp/zypper.conf
