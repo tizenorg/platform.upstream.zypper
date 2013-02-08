@@ -12,7 +12,7 @@ License:        GPL-2.0+
 Group:          System/Packages
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 Summary:        Command line software manager using libzypp
-Version:        1.8.4
+Version:        1.8.10
 Release:        0
 Source:         %{name}-%{version}.tar.bz2
 Source1:        %{name}-rpmlintrc
