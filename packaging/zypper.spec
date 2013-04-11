@@ -9,7 +9,7 @@ BuildRequires:  cmake >= 2.4.6
 Requires:       procps
 Requires:       libzypp
 License:        GPL-2.0+
-Group:          System/Packages
+Group:          System/Package Management
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 Summary:        Command line software manager using libzypp
 Version:        1.8.14
