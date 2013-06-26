@@ -81,6 +81,7 @@ cd ..
 %{find_lang} zypper
 %{__install} -d -m755 $RPM_BUILD_ROOT%{_var}/log
 touch $RPM_BUILD_ROOT%{_var}/log/zypper.log
+rm %{buildroot}%{_datadir}/doc/packages/zypper/COPYING
 
 %lang_package
 
@@ -102,7 +103,6 @@ touch $RPM_BUILD_ROOT%{_var}/log/zypper.log
 %doc %dir %{_datadir}/doc/packages/zypper
 %doc %{_datadir}/doc/packages/zypper/TODO
 %doc %{_datadir}/doc/packages/zypper/zypper-rug
-%doc %{_datadir}/doc/packages/zypper/COPYING
 %doc %{_datadir}/doc/packages/zypper/HACKING
 # declare ownership of the log file but prevent
 # it from being erased by rpm -e
