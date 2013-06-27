@@ -1,0 +1,10 @@
+Change-Id: I3238a3f2036e51f7c6b58469b0679ea3e59428d9
+Code-Review+1: Patrick McCarty <patrick.mccarty@linux.intel.com>
+Code-Review+2: Anas Nashif <anas.nashif@intel.com>
+Verified+1: Anas Nashif <anas.nashif@intel.com>
+Code-Review+1: William Douglas <william.douglas@intel.com>
+Submitted-by: Anas Nashif <anas.nashif@intel.com>
+Submitted-at: Thu, 27 Jun 2013 11:36:53 -0700
+Reviewed-on: https://review.tizen.org/gerrit/4298
+Project: platform/upstream/zypper
+Branch: refs/heads/tizen
