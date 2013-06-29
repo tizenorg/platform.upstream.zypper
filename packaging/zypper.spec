@@ -16,6 +16,7 @@ Version:        1.8.14
 Release:        0
 Source:         %{name}-%{version}.tar.bz2
 Source1:        %{name}-rpmlintrc
+Source1001: 	zypper.manifest
 URL:            http://en.opensuse.org/Zypper
 
 %description
@@ -48,6 +49,7 @@ Authors:
 
 %prep
 %setup -q
+cp %{SOURCE1001} .
 
 %build
 mkdir build
@@ -86,6 +88,7 @@ rm %{buildroot}%{_datadir}/doc/packages/zypper/COPYING
 %lang_package
 
 %files 
+%manifest %{name}.manifest
 %license COPYING
 %defattr(-,root,root)
 %config(noreplace) %{_sysconfdir}/zypp/zypper.conf
@@ -109,6 +112,7 @@ rm %{buildroot}%{_datadir}/doc/packages/zypper/COPYING
 %ghost %config(noreplace) %{_var}/log/zypper.log
 
 %files log
+%manifest %{name}.manifest
 %defattr(-,root,root)
 %{_sbindir}/zypper-log
 %doc %{_mandir}/man8/zypper-log.8*
