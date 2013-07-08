@@ -1,0 +1,8 @@
+Change-Id: If1d4cfc301168fe4d1f9a804a6450eac8f196e62
+Code-Review+2: Ryan Ware <ware@linux.intel.com>
+Verified+1: Ryan Ware <ware@linux.intel.com>
+Submitted-by: Ryan Ware <ware@linux.intel.com>
+Submitted-at: Mon, 08 Jul 2013 09:38:09 -0700
+Reviewed-on: https://review.tizen.org/gerrit/5038
+Project: platform/upstream/zypper
+Branch: refs/heads/tizen
