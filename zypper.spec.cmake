@@ -25,10 +25,6 @@ BuildRequires:  augeas-devel >= 0.5.0
 BuildRequires:  gcc-c++ >= 4.5
 BuildRequires:  cmake >= 2.4.6
 Requires:       procps
-%if 0%{?suse_version}
-%requires_ge    libzypp
-Recommends:     logrotate cron zypper-log
-%endif
 License:        GPL-2.0+
 Group:          System/Packages
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
@@ -59,12 +55,7 @@ Authors:
     Josef Reidinger <jreidinger@suse.cz>
 
 %package log
-%if 0%{?suse_version} && 0%{?suse_version} < 1140
-Requires:       python >= 2.6
-Requires:       python-argparse
-%else
 Requires:       python >= 2.7
-%endif
 Requires:	xz
 BuildArch:      noarch
 Summary:        CLI for accessing the zypper logfile
@@ -81,9 +72,6 @@ Authors:
 Summary:        aptitude compatibility with zypper
 License:        GPL-2.0+
 Requires:       perl
-%if 0%{?suse_version}
-Supplements:    zypper
-%endif
 BuildArch:      noarch
 Group:          System/Packages
 %description aptitude
@@ -103,11 +91,6 @@ cd build
 # The code base is the same, but SLES11-SP1 (suse_version == 1110)
 # may use it's own set of .po files from po/sle-zypper-po.tar.bz2.
 unset TRANSLATION_SET
-%if 0%{?suse_version} == 1110
-if [ -f ../po/sle-zypper-po.tar.bz ]; then
-  export TRANSLATION_SET=sle-zypper
-fi
-%endif
 
 cmake -DCMAKE_INSTALL_PREFIX=%{_prefix} \
       -DSYSCONFDIR=%{_sysconfdir} \
