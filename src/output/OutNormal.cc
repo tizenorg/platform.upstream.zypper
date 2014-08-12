@@ -24,8 +24,8 @@
 
 using namespace std;
 
-OutNormal::OutNormal(Verbosity verbosity)
-  : Out(TYPE_NORMAL, verbosity),
+OutNormal::OutNormal(Verbosity verbosity_r)
+  : Out(TYPE_NORMAL, verbosity_r),
     _use_colors(false), _isatty(isatty(STDOUT_FILENO)), _newline(true), _oneup(false)
 {}
 
@@ -42,25 +42,29 @@ bool OutNormal::mine(Type type)
   return false;
 }
 
-bool OutNormal::infoWarningFilter(Verbosity verbosity, Type mask)
+bool OutNormal::infoWarningFilter(Verbosity verbosity_r, Type mask)
 {
   if (!mine(mask))
     return true;
-  if (this->verbosity() < verbosity)
+  if (verbosity() < verbosity_r)
     return true;
   return false;
 }
 
-void OutNormal::info(const std::string & msg, Verbosity verbosity, Type mask)
+void OutNormal::info(const std::string & msg, Verbosity verbosity_r, Type mask)
 {
-  if (infoWarningFilter(verbosity, mask))
+  if (infoWarningFilter(verbosity_r, mask))
     return;
 
   if (!_newline)
     cout << endl;
 
-  if (verbosity == Out::QUIET)
+  if (verbosity_r == Out::QUIET)
     print_color(msg, COLOR_CONTEXT_RESULT);
+  else if (verbosity_r == Out::DEBUG)
+  {
+    print_color(msg, COLOR_CONTEXT_OSDEBUG);
+  }
   else
     print_color(msg, COLOR_CONTEXT_MSG_STATUS);
 
@@ -68,12 +72,12 @@ void OutNormal::info(const std::string & msg, Verbosity verbosity, Type mask)
   _newline = true;
 }
 
-void OutNormal::infoLine( const TermLine & msg, Verbosity verbosity, Type mask )
-{ info( msg.get( termwidth() ), verbosity, mask ); }
+void OutNormal::infoLine( const TermLine & msg, Verbosity verbosity_r, Type mask )
+{ info( msg.get( termwidth() ), verbosity_r, mask ); }
 
-void OutNormal::warning(const std::string & msg, Verbosity verbosity, Type mask)
+void OutNormal::warning(const std::string & msg, Verbosity verbosity_r, Type mask)
 {
-  if (infoWarningFilter(verbosity, mask))
+  if (infoWarningFilter(verbosity_r, mask))
     return;
 
   if (!_newline)
@@ -90,7 +94,7 @@ void OutNormal::error(const std::string & problem_desc, const std::string & hint
     cout << endl;
 
   fprint_color(cerr, problem_desc, COLOR_CONTEXT_MSG_ERROR);
-  if (!hint.empty() && this->verbosity() > Out::QUIET)
+  if (!hint.empty() && verbosity() > Out::QUIET)
     cerr << endl << hint;
   cerr << endl;
   _newline = true;
@@ -113,7 +117,7 @@ void OutNormal::error(const zypp::Exception & e,
   cerr << endl;
 
   // hint
-  if (!hint.empty() && this->verbosity() > Out::QUIET)
+  if (!hint.empty() && verbosity() > Out::QUIET)
     cerr << hint << endl;
 
   _newline = true;
@@ -420,15 +424,13 @@ void OutNormal::promptHelp(const PromptOptions & poptions)
   _newline = true;
 }
 
-unsigned int OutNormal::termwidth() const {
-  if(!_isatty)
-    return 10000;
-  else
+unsigned OutNormal::termwidth() const
+{
+  if ( _isatty )
   {
     struct winsize wns;
     if (!ioctl(1, TIOCGWINSZ, &wns))
       return wns.ws_col;
-    else
-      return 10000;
   }
+  return Out::termwidth();	// unlimited
 }

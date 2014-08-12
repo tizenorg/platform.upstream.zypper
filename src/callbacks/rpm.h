@@ -12,10 +12,10 @@
 #include <sstream>
 #include <ctime>
 
-#include <boost/format.hpp>
-
 #include <zypp/base/Logger.h>
 #include <zypp/base/String.h>
+#include <zypp/sat/Queue.h>
+#include <zypp/sat/FileConflicts.h>
 #include <zypp/ZYppCallbacks.h>
 #include <zypp/Package.h>
 #include <zypp/Patch.h>
@@ -23,28 +23,88 @@
 #include "Zypper.h"
 #include "output/prompt.h"
 
-
-static bool report_again( timespec & lastTime_r, int & lastValue_r, int currentValue_r )
+///////////////////////////////////////////////////////////////////
+namespace out
 {
-  // Don't report more often than 5 times per sec,
-  // but also leaving 0%, more than 20% step and reaching 100%
-  timespec now;
-  clock_gettime( CLOCK_REALTIME, &now );
-  if ( now.tv_sec > lastTime_r.tv_sec
-    || ( now.tv_sec == lastTime_r.tv_sec && now.tv_nsec > lastTime_r.tv_nsec + 200000000L )
-    || ( lastValue_r != currentValue_r && ( lastValue_r + 20 <= currentValue_r || lastValue_r == 0 || currentValue_r == 100 ) ) )
+  ///////////////////////////////////////////////////////////////////
+  /// \class FileConflictsListFormater
+  /// \brief Printing FileConflicts in List
+  ///////////////////////////////////////////////////////////////////
+  struct FileConflictsListFormater
   {
-    lastTime_r = now;
-    lastValue_r = currentValue_r;
-    return true;
-  }
-  return false;
-}
+    typedef out::DefaultGapedListLayout ListLayout;
+
+    struct XmlFormater
+    {
+      std::string operator()( const sat::FileConflicts::Conflict & val_r ) const
+      { str::Str str; dumpAsXmlOn( str.stream(), val_r ); return str; }
+    };
+
+    std::string operator()( const sat::FileConflicts::Conflict & val_r ) const
+    { return asUserString( val_r ); }
+  };
+  ///////////////////////////////////////////////////////////////////
+
+  /** \relates SolvableListFormater Conversion to sat::Solvable */
+  template <class _Tp>
+  sat::Solvable asSolvable( const _Tp & val_r )
+  { return sat::asSolvable( val_r ); }
+
+  sat::Solvable asSolvable( int val_r )		// e.g. satQueues use int as SolvabeId
+  { return sat::Solvable( val_r ); }
+
+  ///////////////////////////////////////////////////////////////////
+  /// \class SolvableListFormater
+  /// \brief Printing Solvable based types in List (legacy format used in summary)
+  ///////////////////////////////////////////////////////////////////
+  struct SolvableListFormater
+  {
+    typedef out::CompressedListLayout ListLayout;
+
+    struct XmlFormater
+    {
+      template <class _Tp>
+      std::string operator()( const _Tp & val_r ) const
+      { return operator()( makeResObject( asSolvable( val_r ) ) ); }
+
+      std::string operator()( ResObject::Ptr val_r, ResObject::Ptr old_r = nullptr ) const
+      {
+	str::Str ret;
+	ret << "<solvable";
+	ret << " type=\""	<< val_r->kind() << "\"";
+	ret << " name=\""	<< val_r->name() << "\"";
+	ret << " edition=\""	<< val_r->edition() << "\"";
+	ret << " arch=\""	<< val_r->arch() << "\"";
+	{
+	  const std::string & text( val_r->summary() );
+	  if ( ! text.empty() )
+	    ret << " summary=\"" << xml::escape( text ) << "\"";
+	}
+	{
+	  const std::string & text( val_r->description() );
+	  if ( ! text.empty() )
+	    ret << ">\n" << "<description>" << xml::escape( text ) << "</description>" << "</solvable>";
+	  else
+	    ret << "/>";
+	}
+	return ret;
+      }
+    };
+
+    template <class _Tp>
+    std::string operator()( const _Tp & val_r ) const
+    { return operator()( makeResObject( asSolvable( val_r ) ) ); }
+
+    std::string operator()( ResObject::Ptr val_r, ResObject::Ptr old_r = nullptr ) const
+    { return val_r->ident().asString(); }
+  };
+
+} // namespace out
+///////////////////////////////////////////////////////////////////
 
 ///////////////////////////////////////////////////////////////////
 namespace ZmartRecipients
 {
-
 
 // resolvable Message
 struct PatchMessageReportReceiver : public zypp::callback::ReceiveReport<zypp::target::PatchMessageReport>
@@ -128,146 +188,239 @@ struct PatchScriptReportReceiver : public zypp::callback::ReceiveReport<zypp::ta
  // progress for removing a resolvable
 struct RemoveResolvableReportReceiver : public zypp::callback::ReceiveReport<zypp::target::rpm::RemoveResolvableReport>
 {
-  std::string _label;
-  timespec _last_reported;
-  zypp::DefaultIntegral<int,0> _last_percent;
-
   virtual void start( zypp::Resolvable::constPtr resolvable )
   {
     Zypper & zypper = *Zypper::instance();
-    ::clock_gettime(CLOCK_REALTIME, &_last_reported);
-    _last_percent.reset();
-    _label = zypp::str::form("(%*d/%d) ", (int)zypp::str::asString(zypper.runtimeData().rpm_pkgs_total).length(),
-                             ++zypper.runtimeData().rpm_pkg_current,
-                             zypper.runtimeData().rpm_pkgs_total );
-    // translators: This text is a progress display label e.g. "Removing packagename-x.x.x [42%]"
-    _label += boost::str(boost::format(_("Removing %s-%s"))
-        % resolvable->name() % resolvable->edition());
-    Zypper::instance()->out().progressStart("remove-resolvable", _label);
+    _progress.reset( new Out::ProgressBar( zypper.out(),
+					   "remove-resolvable",
+					   // translators: This text is a progress display label e.g. "Removing packagename-x.x.x [42%]"
+					   boost::format(_("Removing %s-%s"))
+							 % resolvable->name()
+							 % resolvable->edition(),
+					   ++zypper.runtimeData().rpm_pkg_current,
+					   zypper.runtimeData().rpm_pkgs_total ) );
+    (*_progress)->range( 100 );	// progress reports percent
   }
 
   virtual bool progress( int value, zypp::Resolvable::constPtr resolvable )
   {
-    // don't report too often
-    if ( report_again( _last_reported, _last_percent, value ) )
-    {
-      Zypper::instance()->out().progress( "remove-resolvable", _label, value );
-    }
+    if ( _progress )
+      (*_progress)->set( value );
     return true;
   }
 
   virtual Action problem( zypp::Resolvable::constPtr resolvable, Error error, const std::string & description )
   {
-    Zypper::instance()->out().progressEnd("remove-resolvable", _label, true);
+    // finsh progress; indicate error
+    if ( _progress )
+    {
+      (*_progress).error();
+      _progress.reset();
+    }
+
     std::ostringstream s;
     s << boost::format(_("Removal of %s failed:")) % resolvable << std::endl;
     s << zcb_error2str(error, description);
     Zypper::instance()->out().error(s.str());
+
     return (Action) read_action_ari (PROMPT_ARI_RPM_REMOVE_PROBLEM, ABORT);
   }
 
   virtual void finish( zypp::Resolvable::constPtr /*resolvable*/, Error error, const std::string & reason )
   {
+    // finsh progress; indicate error
+    if ( _progress )
+    {
+      (*_progress).error( error != NO_ERROR );
+      _progress.reset();
+    }
+
     if (error != NO_ERROR)
       // set proper exit code, don't write to output, the error should have been reported in problem()
       Zypper::instance()->setExitCode(ZYPPER_EXIT_ERR_ZYPP);
     else
     {
-      Zypper::instance()->out().progressEnd("remove-resolvable", _label);
-
       // print additional rpm output
       // bnc #369450
-      if (!reason.empty())
+      if ( !reason.empty() )
         Zypper::instance()->out().info(reason);
     }
   }
-};
 
-std::ostream & operator << (std::ostream & stm,
-                            zypp::target::rpm::InstallResolvableReport::RpmLevel level)
-{
-  static const char * level_s[] = {
-    // TranslatorExplanation --nodeps and --force are options of the rpm command, don't translate
-    //! \todo use format
-    "", _("(with --nodeps)"), _("(with --nodeps --force)")
-  };
-  return stm << level_s[level];
-}
+  virtual void reportend()
+  { _progress.reset(); }
+
+private:
+  scoped_ptr<Out::ProgressBar>	_progress;
+};
 
 ///////////////////////////////////////////////////////////////////
 // progress for installing a resolvable
 struct InstallResolvableReportReceiver : public zypp::callback::ReceiveReport<zypp::target::rpm::InstallResolvableReport>
 {
-  zypp::Resolvable::constPtr _resolvable;
-  std::string _label;
-  timespec _last_reported;
-  zypp::DefaultIntegral<int,0> _last_percent;
-
   virtual void start( zypp::Resolvable::constPtr resolvable )
   {
     Zypper & zypper = *Zypper::instance();
-    clock_gettime(CLOCK_REALTIME, &_last_reported);
-    _last_percent.reset();
-    _resolvable = resolvable;
-    _label = zypp::str::form("(%*d/%d) ", (int)zypp::str::asString(zypper.runtimeData().rpm_pkgs_total).length(),
-                              ++zypper.runtimeData().rpm_pkg_current,
-                              zypper.runtimeData().rpm_pkgs_total );
-    // TranslatorExplanation This text is a progress display label e.g. "Installing: foo-1.1.2 [42%]"
-    _label += boost::str(boost::format(_("Installing: %s-%s"))
-        % resolvable->name() % resolvable->edition());
-    Zypper::instance()->out().progressStart("install-resolvable", _label);
+    _progress.reset( new Out::ProgressBar( zypper.out(),
+					   "install-resolvable",
+					   // TranslatorExplanation This text is a progress display label e.g. "Installing: foo-1.1.2 [42%]"
+					   boost::format(_("Installing: %s-%s"))
+							 % resolvable->name()
+							 % resolvable->edition(),
+					   ++zypper.runtimeData().rpm_pkg_current,
+					   zypper.runtimeData().rpm_pkgs_total ) );
+    (*_progress)->range( 100 );	// progress reports percent
   }
 
   virtual bool progress( int value, zypp::Resolvable::constPtr resolvable )
   {
-    // don't report too often
-    if ( report_again( _last_reported, _last_percent, value ) )
-    {
-      Zypper::instance()->out().progress( "install-resolvable", _label, value );
-    }
+    if ( _progress )
+      (*_progress)->set( value );
     return true;
   }
 
-  virtual Action problem( zypp::Resolvable::constPtr resolvable, Error error, const std::string & description, RpmLevel level )
+  virtual Action problem( zypp::Resolvable::constPtr resolvable, Error error, const std::string & description, RpmLevel /*unused*/ )
   {
-    if (level < RPM_NODEPS_FORCE)
+    // finsh progress; indicate error
+    if ( _progress )
     {
-      DBG << "Install failed, will retry more aggressively"
-             " (with --nodeps, --force)." << std::endl;
-      return ABORT;
+      (*_progress).error();
+      _progress.reset();
     }
 
-    Zypper::instance()->out().progressEnd("install-resolvable", _label, true);
     std::ostringstream s;
     s << boost::format(_("Installation of %s-%s failed:")) % resolvable->name() % resolvable->edition() << std::endl;
-    s << level << " " << zcb_error2str(error, description);
+    s << zcb_error2str(error, description);
     Zypper::instance()->out().error(s.str());
 
     return (Action) read_action_ari (PROMPT_ARI_RPM_INSTALL_PROBLEM, ABORT);
   }
 
-  virtual void finish( zypp::Resolvable::constPtr /*resolvable*/, Error error, const std::string & reason, RpmLevel level )
+  virtual void finish( zypp::Resolvable::constPtr /*resolvable*/, Error error, const std::string & reason, RpmLevel /*unused*/ )
   {
-    if (error != NO_ERROR && level < RPM_NODEPS_FORCE)
+    // finsh progress; indicate error
+    if ( _progress )
     {
-      DBG << "level < RPM_NODEPS_FORCE: aborting without displaying an error"
-          << std::endl;
-      return;
+      (*_progress).error( error != NO_ERROR );
+      _progress.reset();
     }
 
-    if (error != NO_ERROR)
+    if ( error != NO_ERROR )
       // don't write to output, the error should have been reported in problem() (bnc #381203)
       Zypper::instance()->setExitCode(ZYPPER_EXIT_ERR_ZYPP);
     else
     {
-      Zypper::instance()->out().progressEnd("install-resolvable", _label);
-
       // print additional rpm output
       // bnc #369450
-      if (!reason.empty())
+      if ( !reason.empty() )
         Zypper::instance()->out().info(reason);
     }
   }
+
+  virtual void reportend()
+  { _progress.reset(); }
+
+private:
+  scoped_ptr<Out::ProgressBar>	_progress;
+};
+
+///////////////////////////////////////////////////////////////////
+/// \class FindFileConflictstReportReceive
+/// \brief
+///////////////////////////////////////////////////////////////////
+struct FindFileConflictstReportReceiver : public zypp::callback::ReceiveReport<zypp::target::FindFileConflictstReport>
+{
+  virtual void reportbegin()
+  {
+    _progress.reset( new Out::ProgressBar( Zypper::instance()->out(),
+					   "fileconflict-check",
+					   // TranslatorExplanation A progressbar label
+					   _("Checking for file conflicts:") ) );
+  }
+
+  virtual bool start( const ProgressData & progress_r )
+  {
+    (*_progress)->set( progress_r );
+    return !Zypper::instance()->exitRequested();
+  }
+
+  virtual bool progress( const ProgressData & progress_r, const sat::Queue & noFilelist_r )
+  {
+    (*_progress)->set( progress_r );
+    return !Zypper::instance()->exitRequested();
+  }
+
+  virtual bool result( const ProgressData & progress_r, const sat::Queue & noFilelist_r, const sat::FileConflicts & conflicts_r )
+  {
+    // finsh progress; only conflicts count as error; missing filelists due
+    // to download-as-needed are just a warning. Different behavior breaks KIWI.
+    (*_progress).error( !conflicts_r.empty() );
+    _progress.reset();
+
+    if ( conflicts_r.empty() && noFilelist_r.empty() )
+      return !Zypper::instance()->exitRequested();
+
+    // show error result
+    Out & out( Zypper::instance()->out() );
+    {
+      Out::XmlNode guard( out, "fileconflict-summary" );
+
+      if ( ! noFilelist_r.empty() )	// warning
+      {
+	out.warning( boost::formatNAC(
+		       // TranslatorExplanation %1%(commandline option)
+		       _("Checking for file conflicts requires not installed packages to be downloaded in advance "
+	                 "in order to access their file lists. See option '%1%' in the zypper manual page for details.")
+		     ) % "--download-in-advance" );
+	out.gap();
+
+	out.list( "no-filelist",
+		  // TranslatorExplanation %1%(number of packages); detailed list follows
+		  _PL("The following package had to be excluded from file conflicts check because it is not yet downloaded:",
+		      "The following %1% packages had to be excluded from file conflicts check because they are not yet downloaded:",
+		      noFilelist_r.size() ),
+		  noFilelist_r, out::SolvableListFormater() );
+	out.gap();
+      }
+
+      if ( ! conflicts_r.empty() )	// error + prompt
+      {
+	out.list( "fileconflicts",
+		  // TranslatorExplanation %1%(number of conflicts); detailed list follows
+		  _PL("Detected %1% file conflict:",
+		      "Detected %1% file conflicts:",
+		      conflicts_r.size() ),
+		  conflicts_r, out::FileConflictsListFormater() );
+	out.gap();
+
+	if ( Zypper::instance()->cOpts().count("replacefiles") )
+	{
+	  out.info( _("Conflicting files will be replaced."), " [--replacefiles]" );
+	}
+	else
+	{
+	  bool cont = read_bool_answer( PROMPT_YN_CONTINUE_ON_FILECONFLICT, str::Str()
+		      // TranslatorExplanation Problem description before asking whether to "Continue? [yes/no] (no):"
+		      <<_("File conflicts happen when two packages attempt to install files with the same name but different contents. If you continue, conflicting files will be replaced losing the previous content.")
+		      << "\n"
+		      <<_("Continue?"),
+		      false );
+	  out.gap();
+
+	  if ( ! cont )
+	    return false;		// aborted.
+	}
+      }
+    }
+
+    return !Zypper::instance()->exitRequested();
+  }
+
+  virtual void reportend()
+  { _progress.reset(); }
+
+private:
+  scoped_ptr<Out::ProgressBar>	_progress;
 };
 
 
@@ -282,16 +435,16 @@ class RpmCallbacks {
     ZmartRecipients::PatchScriptReportReceiver _scriptReceiver;
     ZmartRecipients::RemoveResolvableReportReceiver _installReceiver;
     ZmartRecipients::InstallResolvableReportReceiver _removeReceiver;
-    int _step_counter;
+    ZmartRecipients::FindFileConflictstReportReceiver _fileConflictsReceiver;
 
   public:
     RpmCallbacks()
-	: _step_counter( 0 )
     {
       _messageReceiver.connect();
       _scriptReceiver.connect();
       _installReceiver.connect();
       _removeReceiver.connect();
+      _fileConflictsReceiver.connect();
     }
 
     ~RpmCallbacks()
@@ -300,6 +453,7 @@ class RpmCallbacks {
       _scriptReceiver.disconnect();
       _installReceiver.disconnect();
       _removeReceiver.disconnect();
+      _fileConflictsReceiver.disconnect();
     }
 };
 

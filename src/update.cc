@@ -136,6 +136,7 @@ static bool xml_list_patches (Zypper & zypper)
 	cout << "arch=\""  << res->arch().asString() << "\" ";
 	cout << "status=\""  << patchStatusAsString( *it ) << "\" ";
         cout << "category=\"" <<  patch->category() << "\" ";
+        cout << "severity=\"" <<  patch->severity() << "\" ";
         cout << "pkgmanager=\"" << (patch->restartSuggested() ? "true" : "false") << "\" ";
         cout << "restart=\"" << (patch->rebootSuggested() ? "true" : "false") << "\" ";
 
@@ -148,14 +149,14 @@ static bool xml_list_patches (Zypper & zypper)
         cout << "interactive=\"" << (patch->interactiveWhenIgnoring(ignoreFlags) ? "true" : "false") << "\" ";
         cout << "kind=\"patch\"";
         cout << ">" << endl;
-        cout << "  <summary>" << xml_encode(patch->summary()) << "  </summary>" << endl;
-        cout << "  <description>" << xml_encode(patch->description()) << "</description>" << endl;
-        cout << "  <license>" << xml_encode(patch->licenseToConfirm()) << "</license>" << endl;
+        cout << "  <summary>" << xml::escape(patch->summary()) << "  </summary>" << endl;
+        cout << "  <description>" << xml::escape(patch->description()) << "</description>" << endl;
+        cout << "  <license>" << xml::escape(patch->licenseToConfirm()) << "</license>" << endl;
 
         if ( !patch->repoInfo().alias().empty() )
         {
-          cout << "  <source url=\"" << xml_encode(patch->repoInfo().url().asString());
-          cout << "\" alias=\"" << xml_encode(patch->repoInfo().alias()) << "\"/>" << endl;
+          cout << "  <source url=\"" << xml::escape(patch->repoInfo().url().asString());
+          cout << "\" alias=\"" << xml::escape(patch->repoInfo().alias()) << "\"/>" << endl;
         }
 
         cout << " </update>" << endl;
@@ -187,14 +188,14 @@ static void xml_list_updates(const ResKindSet & kinds)
     cout << "arch=\""  << res->arch().asString() << "\" ";
     cout << "kind=\"" << res->kind() << "\" ";
     cout << ">" << endl;
-    cout << "  <summary>" << xml_encode(res->summary()) << "  </summary>" << endl;
-    cout << "  <description>" << xml_encode(res->description()) << "</description>" << endl;
-    cout << "  <license>" << xml_encode(res->licenseToConfirm()) << "</license>" << endl;
+    cout << "  <summary>" << xml::escape(res->summary()) << "  </summary>" << endl;
+    cout << "  <description>" << xml::escape(res->description()) << "</description>" << endl;
+    cout << "  <license>" << xml::escape(res->licenseToConfirm()) << "</license>" << endl;
 
     if ( !res->repoInfo().alias().empty() )
     {
-        cout << "  <source url=\"" << xml_encode(res->repoInfo().url().asString());
-        cout << "\" alias=\"" << xml_encode(res->repoInfo().alias()) << "\"/>" << endl;
+        cout << "  <source url=\"" << xml::escape(res->repoInfo().url().asString());
+        cout << "\" alias=\"" << xml::escape(res->repoInfo().alias()) << "\"/>" << endl;
     }
 
     cout << " </update>" << endl;
@@ -258,7 +259,7 @@ static bool list_patch_updates(Zypper & zypper)
   unsigned cols;
 
   th << (zypper.globalOpts().is_rug_compatible ? _("Catalog") : _("Repository"))
-     << _("Name") << table::EditionStyleSetter( tbl, _("Version") ) << _("Category") << _("Status") << _("Summary");
+     << _("Name") << _("Category") << _("Severity") << _("Status") << _("Summary");
   cols = 6;
   tbl << th;
   pm_tbl << th;
@@ -279,7 +280,7 @@ static bool list_patch_updates(Zypper & zypper)
           continue;
       }
 
-      if (!category.empty() && category != patch->category())
+      if ( ! ( category.empty() || patch->isCategory( category ) ) )
       {
         DBG << "candidate patch " << patch << " is not in the specified category" << endl;
         continue;
@@ -288,9 +289,10 @@ static bool list_patch_updates(Zypper & zypper)
       // table
       {
         TableRow tr (cols);
-        tr << (zypper.config().show_alias ? patch->repoInfo().alias() : patch->repoInfo().name());
-        tr << res->name () << res->edition ().asString();
+        tr << patch->repoInfo().asUserString();
+        tr << res->name ();
         tr << patch->category();
+        tr << patch->severity();
         tr << (it->isBroken() ? _("needed") : _("not needed"));
         tr << patch->summary();
 
@@ -521,7 +523,7 @@ void list_updates(Zypper & zypper, const ResKindSet & kinds, bool best_effort)
       TableRow tr (cols);
       tr << "v";
       if (!hide_repo) {
-        tr << (zypper.config().show_alias ?  res->repoInfo().alias() : res->repoInfo().name());
+        tr << res->repoInfo().asUserString();
       }
       if (zypper.globalOpts().is_rug_compatible)
         tr << "";               // Bundle
@@ -579,7 +581,7 @@ void list_patches_by_issue(Zypper & zypper)
 
   Table t;
   TableHeader th;
-  th << _("Issue") << _("No.") << _("Patch") << _("Category") << _("Status");
+  th << _("Issue") << _("No.") << _("Patch") << _("Category") << _("Severity") << _("Status");
   t << th;
 
 #define FILL_ISSUES(TYPE, ID) \
@@ -671,8 +673,9 @@ void list_patches_by_issue(Zypper & zypper)
         TableRow tr;
         tr << itype;
         tr << d->subFind(sat::SolvAttr::updateReferenceId).asString();
-        tr << (patch->name() + "-" + patch->edition().asString());
+        tr << patch->name();
         tr << patch->category();
+        tr << patch->severity();
         tr << (pi.isBroken() ? _("needed") : _("not needed"));
         t << tr;
       }
@@ -682,7 +685,7 @@ void list_patches_by_issue(Zypper & zypper)
   // look for matches in patch descriptions
   Table t1;
   TableHeader th1;
-  th1 << _("Name") << table::EditionStyleSetter( t1, _("Version") ) << _("Category") << _("Summary");
+  th1 << _("Name") << _("Category") << _("Severity") << _("Summary");
   t1 << th1;
   if (!issuesstr.empty())
   {
@@ -701,7 +704,7 @@ void list_patches_by_issue(Zypper & zypper)
       Patch::constPtr patch = asKind<Patch>(pi.resolvable());
 
       TableRow tr;
-      tr << patch->name() << patch->edition().asString() << patch->category();
+      tr << patch->name() << patch->category() << patch->severity();
       //! \todo could show a highlighted match with a portion of surrounding
       //! text. Needs case-insensitive find.
       tr << patch->summary();

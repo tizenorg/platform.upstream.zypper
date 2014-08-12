@@ -7,7 +7,6 @@
 
 #include <iostream>
 #include <fstream>
-#include <boost/format.hpp>
 #include <boost/logic/tribool.hpp>
 #include <boost/lexical_cast.hpp>
 #include <iterator>
@@ -30,7 +29,7 @@
 #include "getopt.h"
 #include "Table.h"
 #include "utils/messages.h"
-#include "utils/misc.h" // for xml_encode
+#include "utils/misc.h"
 #include "repos.h"
 
 using namespace std;
@@ -66,7 +65,6 @@ static bool refresh_raw_metadata(Zypper & zypper,
   gData.current_repo = repo;
   bool do_refresh = false;
   string & plabel = zypper.runtimeData().raw_refresh_progress_label;
-  bool show_alias = zypper.config().show_alias;
 
   // reset the gData.current_repo when going out of scope
   struct Bye { ~Bye() { Zypper::instance()->runtimeData().current_repo = RepoInfo(); } } reset __attribute__ ((__unused__));
@@ -79,9 +77,7 @@ static bool refresh_raw_metadata(Zypper & zypper,
     {
       // check whether libzypp indicates a refresh is needed, and if so,
       // print a message
-      zypper.out().info(boost::str(format(
-          _("Checking whether to refresh metadata for %s")) %
-              (show_alias ? repo.alias() : repo.name())),
+      zypper.out().info(boost::str(format( _("Checking whether to refresh metadata for %s")) % repo.asUserString()),
           Out::HIGH);
       if (!repo.baseUrlsEmpty())
       {
@@ -104,14 +100,12 @@ static bool refresh_raw_metadata(Zypper & zypper,
               switch (stat)
               {
               case RepoManager::REPO_UP_TO_DATE:
-                zypper.out().info(boost::str(
-                  format(_("Repository '%s' is up to date.")) %
-                      (show_alias ? repo.alias() : repo.name())));
+                zypper.out().info(boost::str(format(
+		  _("Repository '%s' is up to date.")) % repo.asUserString()));
               break;
               case RepoManager::REPO_CHECK_DELAYED:
-                zypper.out().info(boost::str(
-                  format(_("The up-to-date check of '%s' has been delayed."))
-                      % (show_alias ? repo.alias() : repo.name())), Out::HIGH);
+                zypper.out().info(boost::str(format(
+		  _("The up-to-date check of '%s' has been delayed.")) % repo.asUserString()), Out::HIGH);
               break;
               default:
                 WAR << "new item in enum, which is not covered" << endl;
@@ -140,7 +134,7 @@ static bool refresh_raw_metadata(Zypper & zypper,
     if (do_refresh)
     {
       plabel = str::form(
-          _("Retrieving repository '%s' metadata"), show_alias ? repo.alias().c_str() : repo.name().c_str());
+          _("Retrieving repository '%s' metadata"), repo.asUserString().c_str());
       zypper.out().progressStart("raw-refresh", plabel, true);
 
       manager.refreshMetadata(repo,
@@ -198,10 +192,9 @@ static bool refresh_raw_metadata(Zypper & zypper,
       zypper.out().progressEnd("raw-refresh", plabel, true);
       plabel.clear();
     }
-    zypper.out().error(e,
-        boost::str(format(_("Problem retrieving files from '%s'."))
-            % (show_alias ? repo.alias() : repo.name())),
-        _("Please see the above error message for a hint."));
+    zypper.out().error(e,boost::str(format(
+      _("Problem retrieving files from '%s'.")) % repo.asUserString()),
+      _("Please see the above error message for a hint."));
 
     return true; // error
   }
@@ -213,14 +206,12 @@ static bool refresh_raw_metadata(Zypper & zypper,
       zypper.out().progressEnd("raw-refresh", plabel, true);
       plabel.clear();
     }
-    zypper.out().error(boost::str(
-      format(_("No URIs defined for '%s'."))
-        % (show_alias ? repo.alias() : repo.name())));
+    zypper.out().error(boost::str(format(
+      _("No URIs defined for '%s'.")) % repo.asUserString()));
     if (!repo.filepath().empty())
       zypper.out().info(boost::str(format(
-          // TranslatorExplanation the first %s is a .repo file path
-          _("Please add one or more base URI (baseurl=URI) entries to %s for repository '%s'."))
-          % repo.filepath() % (show_alias ? repo.alias() : repo.name())));
+	// TranslatorExplanation the first %s is a .repo file path
+	_("Please add one or more base URI (baseurl=URI) entries to %s for repository '%s'.")) % repo.filepath() % repo.asUserString()));
 
     return true; // error
   }
@@ -244,10 +235,9 @@ static bool refresh_raw_metadata(Zypper & zypper,
       zypper.out().progressEnd("raw-refresh", plabel, true);
       plabel.clear();
     }
-    zypper.out().error(e,
-        boost::str(format(_("Repository '%s' is invalid."))
-            % (show_alias ? repo.alias() : repo.name())),
-        _("Please check if the URIs defined for this repository are pointing to a valid repository."));
+    zypper.out().error(e, boost::str(format(
+      _("Repository '%s' is invalid.")) % repo.asUserString()),
+      _("Please check if the URIs defined for this repository are pointing to a valid repository."));
 
     return true; // error
   }
@@ -259,12 +249,10 @@ static bool refresh_raw_metadata(Zypper & zypper,
       zypper.out().progressEnd("raw-refresh", plabel, true);
       plabel.clear();
     }
-    zypper.out().error(e,
-        boost::str(format(_("Error retrieving metadata for '%s':"))
-            % (show_alias ? repo.alias() : repo.name())));
+    zypper.out().error(e, boost::str(format(
+      _("Error retrieving metadata for '%s':")) % repo.asUserString()));
     // log untranslated message
-    ERR << format("Error reading repository '%s':")
-        % (show_alias ? repo.alias() : repo.name()) << endl;
+    ERR << format("Error reading repository '%s':") % repo.asUserString() << endl;
 
     return true; // error
   }
@@ -274,7 +262,7 @@ static bool refresh_raw_metadata(Zypper & zypper,
 
 // ---------------------------------------------------------------------------
 
-static bool build_cache(Zypper & zypper, const RepoInfo &repo, bool force_build)
+static bool build_cache(Zypper & zypper, const RepoInfo & repo, bool force_build)
 {
   if (force_build)
     zypper.out().info(_("Forcing building of repository cache"));
@@ -302,14 +290,13 @@ static bool build_cache(Zypper & zypper, const RepoInfo &repo, bool force_build)
   {
     ZYPP_CAUGHT(e);
 
-    zypper.out().error(e,
-        boost::str(format(_("Error parsing metadata for '%s':")) %
-            (zypper.config().show_alias ? repo.alias() : repo.name())),
-        // TranslatorExplanation Don't translate the URL unless it is translated, too
-        _("This may be caused by invalid metadata in the repository,"
-          " or by a bug in the metadata parser. In the latter case,"
-          " or if in doubt, please, file a bug report by following"
-          " instructions at http://en.opensuse.org/Zypper/Troubleshooting"));
+    zypper.out().error(e, boost::str(format(
+      _("Error parsing metadata for '%s':")) % repo.asUserString()),
+      // TranslatorExplanation Don't translate the URL unless it is translated, too
+      _("This may be caused by invalid metadata in the repository,"
+        " or by a bug in the metadata parser. In the latter case,"
+        " or if in doubt, please, file a bug report by following"
+        " instructions at http://en.opensuse.org/Zypper/Troubleshooting"));
 
     // log untranslated message
     ERR << format("Error parsing metadata for '%s':") % repo.alias() << endl;
@@ -319,18 +306,15 @@ static bool build_cache(Zypper & zypper, const RepoInfo &repo, bool force_build)
   catch (const repo::RepoMetadataException & e)
   {
     ZYPP_CAUGHT(e);
-    zypper.out().error(e,
-        boost::str(format(_(
-            "Repository metadata for '%s' not found in local cache."))
-            % (zypper.config().show_alias ? repo.alias() : repo.name())));
+    zypper.out().error(e, boost::str(format(
+      _("Repository metadata for '%s' not found in local cache.")) % repo.asUserString()));
     // this should not happend and is probably a bug, rethrowing
     ZYPP_RETHROW(e);
   }
   catch (const Exception &e)
   {
     ZYPP_CAUGHT(e);
-    zypper.out().error(e,
-        _("Error building the cache:"));
+    zypper.out().error(e, _("Error building the cache:"));
     // log untranslated message
     ERR << "Error writing to cache db" << endl;
 
@@ -368,78 +352,83 @@ bool match_repo(Zypper & zypper, string str, RepoInfo *repo)
   // expensive URL analysis only if the above did not find anything.
   // URL can be ambiguous, in which case the first found match will be returned.
   bool found = false;
-
-  for (RepoManager::RepoConstIterator known_it = manager.repoBegin();
-       known_it != manager.repoEnd(); ++known_it)
+  try
   {
-    try
+    Url strurl(str);	// no need to continue if str is no Url.
+
+    for (RepoManager::RepoConstIterator known_it = manager.repoBegin();
+	 known_it != manager.repoEnd(); ++known_it)
     {
-      // first strip any trailing slash from the path in URLs before comparing
-      // (bnc #585082)
-      // we can afford this because we expect that the repo urls are directories
-      // and it is common practice in servers and operating systems to accept
-      // directory paths both with and without trailing slashes.
-      Url uurl(str);
-      uurl.setPathName(Pathname(uurl.getPathName()).asString());
-
-      url::ViewOption urlview =
-          url::ViewOption::DEFAULTS + url::ViewOption::WITH_PASSWORD;
-      if (zypper.cOpts().count("loose-auth"))
+      try
       {
-        urlview = urlview
-            - url::ViewOptions::WITH_PASSWORD
-            - url::ViewOptions::WITH_USERNAME;
-      }
-      if (zypper.cOpts().count("loose-query"))
-        urlview = urlview - url::ViewOptions::WITH_QUERY_STR;
+	// first strip any trailing slash from the path in URLs before comparing
+	// (bnc #585082)
+	// we can afford this because we expect that the repo urls are directories
+	// and it is common practice in servers and operating systems to accept
+	// directory paths both with and without trailing slashes.
+	Url uurl(strurl);
+	uurl.setPathName(Pathname(uurl.getPathName()).asString());
 
-      // need to do asString(withurlview) comparison here because the user-given
-      // string is expected to have no credentials or query
-      if (!(urlview.has(url::ViewOptions::WITH_PASSWORD)
-            && urlview.has(url::ViewOptions::WITH_QUERY_STR)))
-      {
-        if (!known_it->baseUrlsEmpty())
-        {
-          for_(urlit, known_it->baseUrlsBegin(), known_it->baseUrlsEnd())
-          {
-            Url newrl(*urlit);
-            newrl.setPathName(Pathname(newrl.getPathName()).asString());
-            if (newrl.asString(urlview) == uurl.asString(urlview))
-            {
-              found = true;
-              break;
-            }
-          }
-        }
-      }
-      // ordinary == comparison suffices here (quicker)
-      else
-      {
-        if (!known_it->baseUrlsEmpty())
-        {
-          for_(urlit, known_it->baseUrlsBegin(), known_it->baseUrlsEnd())
-          {
-            Url newrl(*urlit);
-            newrl.setPathName(Pathname(newrl.getPathName()).asString());
-            if (newrl == uurl)
-            {
-              found = true;
-              break;
-            }
-          }
-        }
-      }
+	url::ViewOption urlview =
+	url::ViewOption::DEFAULTS + url::ViewOption::WITH_PASSWORD;
+	if (zypper.cOpts().count("loose-auth"))
+	{
+	  urlview = urlview
+	  - url::ViewOptions::WITH_PASSWORD
+	  - url::ViewOptions::WITH_USERNAME;
+	}
+	if (zypper.cOpts().count("loose-query"))
+	  urlview = urlview - url::ViewOptions::WITH_QUERY_STR;
 
-      if (found)
-      {
-        if (repo)
-          *repo = *known_it;
-        break;
-      }
-    }
-    catch(const url::UrlException &){}
+	// need to do asString(withurlview) comparison here because the user-given
+	// string is expected to have no credentials or query
+	if (!(urlview.has(url::ViewOptions::WITH_PASSWORD)
+	  && urlview.has(url::ViewOptions::WITH_QUERY_STR)))
+	{
+	  if (!known_it->baseUrlsEmpty())
+	  {
+	    for_(urlit, known_it->baseUrlsBegin(), known_it->baseUrlsEnd())
+	    {
+	      Url newrl(*urlit);
+	      newrl.setPathName(Pathname(newrl.getPathName()).asString());
+	      if (newrl.asString(urlview) == uurl.asString(urlview))
+	      {
+		found = true;
+		break;
+	      }
+	    }
+	  }
+	}
+	// ordinary == comparison suffices here (quicker)
+	else
+	{
+	  if (!known_it->baseUrlsEmpty())
+	  {
+	    for_(urlit, known_it->baseUrlsBegin(), known_it->baseUrlsEnd())
+	    {
+	      Url newrl(*urlit);
+	      newrl.setPathName(Pathname(newrl.getPathName()).asString());
+	      if (newrl == uurl)
+	      {
+		found = true;
+		break;
+	      }
+	    }
+	  }
+	}
 
-  } // END for all known repos
+	if (found)
+	{
+	  if (repo)
+	    *repo = *known_it;
+	  break;
+	}
+      }
+      catch(const url::UrlException &){}
+
+    } // END for all known repos
+  }
+  catch(const url::UrlException &){}
 
   return found;
 }
@@ -540,8 +529,8 @@ void report_unknown_repos(Out & out, list<string> not_found)
 
   if (!not_found.empty())
     out.info(str::form(
-        _("Use '%s' to get the list of defined repositories."),
-        "zypper repos"));
+      _("Use '%s' to get the list of defined repositories."),
+      "zypper repos"));
 }
 
 // ----------------------------------------------------------------------------
@@ -564,7 +553,7 @@ unsigned repo_specs_to_aliases(Zypper & zypper,
       aliases.push_back(it->alias());
     else
       zypper.out().warning(str::form(_("Ignoring disabled repository '%s'"),
-        zypper.config().show_alias ? it->alias().c_str() : it->name().c_str()));
+        it->asUserString().c_str()));
   }
   return aliases.size();
 }
@@ -651,14 +640,14 @@ void do_init_repos(Zypper & zypper, const Container & container)
     {
       zypper.out().info(str::form(
           _("Ignoring repository '%s' because of '%s' option."),
-          (zypper.config().show_alias ? it->alias().c_str() : it->name().c_str()), "no-cd"));
+          it->asUserString().c_str(), "no-cd"));
       gData.repos.erase(it++);
     }
     if (no_remote && it->url().schemeIsDownloading())
     {
       zypper.out().info(str::form(
           _("Ignoring repository '%s' because of '%s' option."),
-          (zypper.config().show_alias ? it->alias().c_str() : it->name().c_str()), "no-remote"));
+          it->asUserString().c_str(), "no-remote"));
       gData.repos.erase(it++);
     }
     else
@@ -670,6 +659,25 @@ void do_init_repos(Zypper & zypper, const Container & container)
   {
     RepoInfo repo(*it);
     MIL << "checking if to refresh " << repo.alias() << endl;
+
+    // disabled repos may get temp. enabled to check for --plus-content
+    bool contentcheck = false;
+    if ( ! ( gData.additional_content_repos.empty()
+          || repo.url().schemeIsVolatile()
+	  || repo.enabled() ) )
+    {
+      // Preliminarily enable if last content matches or no content info available.
+      // Final check is done after refresh.
+      if ( repo.hasContentAny( gData.additional_content_repos ) || ! repo.hasContent() )
+      {
+	contentcheck = true;
+	repo.setEnabled( true );
+	zypper.out().info( boost::format(_("Scanning content of disabled repository '%s'."))
+			  % repo.asUserString(),
+			  " [--plus-content]" );
+	MIL << "[--plus-content] check " << repo.alias() << endl;
+      }
+    }
 
     bool do_refresh =
       repo.enabled() &&
@@ -687,12 +695,13 @@ void do_init_repos(Zypper & zypper, const Container & container)
             || build_cache(zypper, repo, false))
         {
           zypper.out().info(boost::str(format(
-              _("Disabling repository '%s'."))
-              % (zypper.config().show_alias ? repo.alias() : repo.name())), Out::QUIET);
+              _("Disabling repository '%s' because of the above error."))
+              % repo.asUserString()), Out::QUIET);
           WAR << format("Disabling repository '%s' because of the above error.")
               % repo.alias() << endl;
 
           it->setEnabled(false);
+	  contentcheck = false;
         }
       }
       // non-root user
@@ -707,7 +716,7 @@ void do_init_repos(Zypper & zypper, const Container & container)
           zypper.out().info(boost::str(format(_(
               "Repository '%s' is out-of-date. You can run 'zypper refresh'"
               " as root to update it."))
-              % (zypper.config().show_alias ? repo.alias() : repo.name())));
+              % repo.asUserString()));
 
           MIL << "We're running as non-root, skipping refresh of "
               << repo.alias() << endl;
@@ -725,11 +734,12 @@ void do_init_repos(Zypper & zypper, const Container & container)
         {
           zypper.out().warning(boost::str(format(
               _("Disabling repository '%s' because of the above error."))
-              % (zypper.config().show_alias ? repo.alias() : repo.name())), Out::QUIET);
+              % repo.asUserString()), Out::QUIET);
           WAR << format("Disabling repository '%s' because of the above error.")
               % repo.alias() << endl;
 
           it->setEnabled(false);
+	  contentcheck = false;
         }
       }
       // non-root user
@@ -743,16 +753,36 @@ void do_init_repos(Zypper & zypper, const Container & container)
           zypper.out().warning(boost::str(format(_(
               "The metadata cache needs to be built for the '%s' repository."
               " You can run 'zypper refresh' as root to do this."))
-              % (zypper.config().show_alias ? repo.alias() : repo.name())), Out::QUIET);
+              % repo.asUserString()), Out::QUIET);
 
           MIL <<  "We're running as non-root, skipping building of "
             << repo.alias() + "cache" << endl;
 
           zypper.out().info(boost::str(format(_("Disabling repository '%s'."))
-              % (zypper.config().show_alias ? repo.alias() : repo.name())));
+              % repo.asUserString()));
           WAR << "Disabling repository '" << repo.alias() << "'" << endl;
           it->setEnabled(false);
+	  contentcheck = false;
         }
+      }
+    }
+
+    if ( contentcheck )
+    {
+      if ( repo.hasContentAny( gData.additional_content_repos ) )
+      {
+	zypper.out().info( boost::format(_("Temporarily enabling repository '%s'."))
+			   % repo.asUserString(),
+			   " [--plus-content]" );
+	it->setEnabled(true);
+	MIL << "[--plus-content] check says use " << repo.alias() << endl;
+      }
+      else
+      {
+	zypper.out().info( boost::format(_("Repository '%s' stays disabled."))
+			   % repo.asUserString(),
+			   " [--plus-content]" );
+	MIL << "[--plus-content] check says disable " << repo.alias() << endl;
       }
     }
   }
@@ -880,6 +910,8 @@ static void print_repo_list(Zypper & zypper,
       || zypper.cOpts().count("sort-by-priority")
       || zypper.cOpts().count("sort-by-alias")
       || zypper.cOpts().count("sort-by-name");
+  bool show_enabled_only = zypper.cOpts().count("show-enabled-only");
+
 
   // header
   TableHeader th;
@@ -966,12 +998,16 @@ static void print_repo_list(Zypper & zypper,
   tbl << th;
 
   // table data
-  int i = 1;
+  int i = 0;
   unsigned nindent = repos.size() > 9 ? repos.size() > 99 ? 3 : 2 : 1;
-  for (list<RepoInfo>::const_iterator it = repos.begin();
-       it !=  repos.end(); ++it)
+  for_( it, repos.begin(), repos.end() )
   {
+    ++i; // continuous numbering including skipped ones
     RepoInfo repo = *it;
+
+    if ( show_enabled_only && !repo.enabled() )
+      continue;
+
     TableRow tr(index);
 
     // number
@@ -1002,12 +1038,13 @@ static void print_repo_list(Zypper & zypper,
       tr << repo.service();
 
     tbl << tr;
-    i++;
   }
 
-  if (tbl.empty())
-    zypper.out().info(_("No repositories defined."
-        " Use the 'zypper addrepo' command to add one or more repositories."));
+  if (tbl.empty()) {
+    zypper.out().warning(_("No repositories defined."));
+    zypper.out().info(_("Use the 'zypper addrepo' command to add one or more repositories."));
+    zypper.setExitCode(ZYPPER_EXIT_NO_REPOS);
+  }
   else
   {
     // sort
@@ -1032,39 +1069,25 @@ static void print_repo_details(Zypper & zypper, list<RepoInfo> & repos)
     t.lineStyle(::Colon);
     t.allowAbbrev(1);
 
-    TableRow tr; tr << _("Alias") << repo.alias(); t << tr;
-    TableRow tr_name; tr_name << _("Name") << repo.name(); t << tr_name;
-    TableRow tr_uri; tr_uri << _("URI") << (repo.baseUrlSet() ? repo.url().asString() : (repo.mirrorListUrl().asString().empty() ? "n/a" : repo.mirrorListUrl().asString() )); t << tr_uri;
-    TableRow tr_en;
-    tr_en << _("Enabled") << (repo.enabled() ? _("Yes") : _("No"));
-    t << tr_en;
-    TableRow tr_prio;
-    tr_prio << _("Priority") << str::form("%d", repo.priority());
-    t << tr_prio;
-    TableRow tr_ref;
-    tr_ref << _("Auto-refresh") << (repo.autorefresh() ? _("On") : _("Off"));
-    t << tr_ref;
-    TableRow tr_keep;
-    tr_keep << _("Keep Packages") << (repo.keepPackages() ? _("On") : _("Off"));
-    t << tr_keep;
-    TableRow tr_type;
-    tr_type << _("Type") << repo.type().asString();
-    t << tr_type;
-    TableRow tr_gpg;
-    tr_gpg << _("GPG Check") << (repo.gpgCheck() ? _("On") : _("Off"));
-    t << tr_gpg;
-    TableRow tr_gpg_key;
-    tr_gpg_key << _("GPG Key URI") << repo.gpgKeyUrl().asString();
-    t << tr_gpg_key;
-    TableRow tr_path;
-    tr_path << _("Path Prefix") << repo.path().asString();
-    t << tr_path;
-    TableRow tr_srv;
-    tr_srv << _("Parent Service") << repo.service();
-    t << tr_srv;
-    TableRow tr_mdpath;
-    tr_mdpath << _("MD Cache Path") << repo.metadataPath().asString();
-    t << tr_mdpath;
+    t << (  TableRow() << _("Alias")		<< repo.alias() )
+      << (  TableRow() << _("Name")		<< repo.name() )
+      << (  TableRow() << _("URI")		<< (repo.baseUrlSet()
+						    ? repo.url().asString()
+						    : (repo.mirrorListUrl().asString().empty()
+						       ? "n/a"
+						       : repo.mirrorListUrl().asString())) )
+      << (  TableRow() << _("Enabled")		<< (repo.enabled() ? _("Yes") : _("No")) )
+      << (  TableRow() << _("Priority")		<< str::form("%d", repo.priority()) )
+      << (  TableRow() << _("Auto-refresh")	<< (repo.autorefresh() ? _("On") : _("Off")) )
+      << (  TableRow() << _("Keep Packages")	<< (repo.keepPackages() ? _("On") : _("Off")) )
+      << (  TableRow() << _("Type")		<< repo.type().asString() )
+      << (  TableRow() << _("GPG Check")	<< (repo.gpgCheck() ? _("On") : _("Off")) )
+      << (  TableRow() << _("GPG Key URI")	<< repo.gpgKeyUrl() )
+      << (  TableRow() << _("Path Prefix")	<< repo.path() )
+      << (  TableRow() << _("Parent Service")	<< repo.service() )
+      << (  TableRow() << _("Repo Info Path")	<< repo.filepath() )
+      << (  TableRow() << _("MD Cache Path")	<< repo.metadataPath() )
+      ;
 
     cout << t;
     another = true;
@@ -1079,7 +1102,7 @@ static void print_xml_repo_list(Zypper & zypper, list<RepoInfo> repos)
   cout << "<repo-list>" << endl;
   for (std::list<RepoInfo>::const_iterator it = repos.begin();
        it !=  repos.end(); ++it)
-    it->dumpAsXMLOn(cout);
+    it->dumpAsXmlOn(cout);
   cout << "</repo-list>" << endl;
 }
 
@@ -1248,8 +1271,7 @@ void refresh_repos(Zypper & zypper)
       if (!repo.enabled())
       {
         string msg = boost::str(
-          format(_("Skipping disabled repository '%s'"))
-            % (zypper.config().show_alias ? repo.alias() : repo.name()));
+          format(_("Skipping disabled repository '%s'")) % repo.asUserString());
 
         if (specified.empty())
           zypper.out().info(msg, Out::HIGH);
@@ -1264,8 +1286,7 @@ void refresh_repos(Zypper & zypper)
       if (refresh_repo(zypper, repo))
       {
         zypper.out().error(boost::str(format(
-          _("Skipping repository '%s' because of the above error."))
-            % (zypper.config().show_alias ? repo.alias() : repo.name())));
+          _("Skipping repository '%s' because of the above error.")) % repo.asUserString()));
         ERR << format("Skipping repository '%s' because of the above error.")
             % repo.alias() << endl;
         error_count++;
@@ -1278,13 +1299,12 @@ void refresh_repos(Zypper & zypper)
   // print the result message
   if (enabled_repo_count == 0)
   {
-    string hint = str::form(
-        _("Use '%s' or '%s' commands to add or enable repositories."),
-        "zypper addrepo", "zypper modifyrepo");
     if (!specified.empty() || !not_found.empty())
-      zypper.out().error(_("Specified repositories are not enabled or defined."), hint);
+      zypper.out().warning(_("Specified repositories are not enabled or defined."));
     else
-      zypper.out().error(_("There are no enabled repositories defined."), hint);
+      zypper.out().warning(_("There are no enabled repositories defined."));
+    zypper.out().info(str::form(_("Use '%s' or '%s' commands to add or enable repositories."),
+				  "zypper addrepo", "zypper modifyrepo"));
   }
   else if (error_count == enabled_repo_count)
   {
@@ -1318,14 +1338,22 @@ bool refresh_repo(Zypper & zypper, const zypp::RepoInfo & repo)
     bool force_download =
       zypper.cOpts().count("force") || zypper.cOpts().count("force-download");
 
-    // without this a cd is required to be present in the drive on each refresh
-    // (or more 'refresh needed' check)
-    bool is_cd = is_changeable_media(repo.url());
-    if (!force_download && is_cd)
-    {
-      MIL << "Skipping refresh of a changeable read-only media." << endl;
-      return false;
-    }
+      ///////////////////////////////////////////////////////////////////
+      // ma: Actually the block below should not be necessary. libzypp asks for
+      // the CD/DVD only if no raw metadata are cached. Once the raw metadata are
+      // present, no refresh takes place. We may just rebuild the solv file in case
+      // it was lost, damaged or has an old format. If this does not work, fix libzypp!
+#if 0
+      // without this a cd is required to be present in the drive on each refresh
+      // (or more 'refresh needed' check)
+      bool is_cd = is_changeable_media(repo.url());
+      if (!force_download && is_cd)
+      {
+	MIL << "Skipping refresh of a changeable read-only media." << endl;
+	return false;
+      }
+#endif
+      ///////////////////////////////////////////////////////////////////
 
     MIL << "calling refreshMetadata" << (force_download ? ", forced" : "")
         << endl;
@@ -1437,8 +1465,7 @@ void clean_repos(Zypper & zypper)
         if( clean_metadata )
 	{
 	    zypper.out().info(boost::str(format(
-	        _("Cleaning metadata cache for '%s'."))
-	        % (zypper.config().show_alias ? repo.alias() : repo.name())),
+	        _("Cleaning metadata cache for '%s'.")) % repo.asUserString()),
 	        Out::HIGH);
 	    manager.cleanCache(repo);
 	}
@@ -1448,16 +1475,14 @@ void clean_repos(Zypper & zypper)
             if ( ! ( scheme == "cd" || scheme == "dvd" ) )
             {
                 zypper.out().info(boost::str(format(
-                    _("Cleaning raw metadata cache for '%s'."))
-                    % (zypper.config().show_alias ? repo.alias() : repo.name())),
+                    _("Cleaning raw metadata cache for '%s'.")) % repo.asUserString()),
                     Out::HIGH);
                 manager.cleanMetadata(repo);
             }
             else
             {
                 zypper.out().info(boost::str(format(
-                    _("Keeping raw metadata cache for %s '%s'.")) % scheme
-                    % (zypper.config().show_alias ? repo.alias() : repo.name())),
+                    _("Keeping raw metadata cache for %s '%s'.")) % scheme % repo.asUserString()),
                     Out::HIGH);
             }
         }
@@ -1465,8 +1490,7 @@ void clean_repos(Zypper & zypper)
 	{
           zypper.out().info(boost::str(format(
               // translators: meaning the cached rpm files
-              _("Cleaning packages for '%s'."))
-              % (zypper.config().show_alias ? repo.alias() : repo.name())),
+              _("Cleaning packages for '%s'.")) % repo.asUserString()),
               Out::HIGH);
     	  manager.cleanPackages(repo);
 	}
@@ -1474,8 +1498,7 @@ void clean_repos(Zypper & zypper)
       catch(...)
       {
         zypper.out().error(boost::str(format(
-            _("Cannot clean repository '%s' because of an error."))
-            % (zypper.config().show_alias ? repo.alias() : repo.name())));
+            _("Cannot clean repository '%s' because of an error.")) % repo.asUserString()));
         ERR << format("Cannot clean repository '%s' because of an error.")
             % repo.alias() << endl;
         error_count++;
@@ -1649,16 +1672,15 @@ void add_repo(Zypper & zypper, RepoInfo & repo)
   }
 
   ostringstream s;
-  s << format(_("Repository '%s' successfully added"))
-      % (zypper.config().show_alias ? repo.alias() : repo.name());
+  s << format(_("Repository '%s' successfully added")) % repo.asUserString();
   s << endl;
 
   if (zypper.globalOpts().is_rug_compatible)
   {
-    s << ( repo.enabled() ? "[x]" : "[ ]" );
-    s << ( repo.autorefresh() ? "* " : "  " );
-    s << (zypper.config().show_alias ? repo.alias() : repo.name());
-    s << " (" << (repo.baseUrlSet() ? repo.url().asString() : (repo.mirrorListUrl().asString().empty() ? "n/a" : repo.mirrorListUrl().asString() )) << ")" << endl;
+    s << ( repo.enabled() ? "[x]" : "[ ]" )
+      << ( repo.autorefresh() ? "* " : "  " )
+      << repo.asUserString()
+      << " (" << (repo.baseUrlSet() ? repo.url().asString() : (repo.mirrorListUrl().asString().empty() ? "n/a" : repo.mirrorListUrl().asString() )) << ")" << endl;
   }
   else
   {
@@ -1682,22 +1704,28 @@ void add_repo(Zypper & zypper, RepoInfo & repo)
 
   MIL << "Repository successfully added: " << repo << endl;
 
-  if(is_cd)
+  if ( is_cd )
   {
-    zypper.out().info(boost::str(
-      format(_("Reading data from '%s' media"))
-        % (zypper.config().show_alias ? repo.alias() : repo.name())));
-    bool error = refresh_raw_metadata(zypper, repo, false);
-    if (!error)
-      error = build_cache(zypper, repo, false);
-    if (error)
+    if ( ! copts.count("no-check") )
     {
-      zypper.out().error(boost::str(
-        format(_("Problem reading data from '%s' media"))
-          % (zypper.config().show_alias ? repo.alias() : repo.name())),
-        _("Please check if your installation media is valid and readable."));
-      zypper.setExitCode(ZYPPER_EXIT_ERR_ZYPP);
-      return;
+      zypper.out().info(boost::str(
+	format(_("Reading data from '%s' media")) % repo.asUserString()));
+	bool error = refresh_raw_metadata(zypper, repo, false);
+	if (!error)
+	  error = build_cache(zypper, repo, false);
+	if (error)
+	{
+	  zypper.out().error(boost::str(
+	    format(_("Problem reading data from '%s' media")) % repo.asUserString()),
+		   _("Please check if your installation media is valid and readable."));
+		   zypper.setExitCode(ZYPPER_EXIT_ERR_ZYPP);
+		   return;
+	}
+    }
+    else
+    {
+      zypper.out().info( boost::format(_("Reading data from '%s' media is delayed until next refresh.")) % repo.asUserString(),
+			 " [--no-check]" );
     }
   }
 }
@@ -1804,8 +1832,7 @@ void add_repo_from_file( Zypper & zypper,
     if(repo.baseUrlsEmpty())
     {
       zypper.out().warning(boost::str(format(
-        _("Repository '%s' has no URI defined, skipping."))
-        % (zypper.config().show_alias ? repo.alias() : repo.name())));
+        _("Repository '%s' has no URI defined, skipping.")) % repo.asUserString()));
       continue;
     }
 
@@ -1848,8 +1875,7 @@ void remove_repo(Zypper & zypper, const RepoInfo & repoinfo)
   RepoManager & manager = zypper.repoManager();
   manager.removeRepository(repoinfo);
   zypper.out().info(boost::str(
-    format(_("Repository '%s' has been removed."))
-      % (zypper.config().show_alias ? repoinfo.alias() : repoinfo.name())));
+    format(_("Repository '%s' has been removed.")) % repoinfo.asUserString()));
   MIL << format("Repository '%s' has been removed.") % repoinfo.alias() << endl;
 }
 
@@ -2464,19 +2490,20 @@ static void print_service_list(Zypper & zypper,
     th << _("URI");
   tbl << th;
 
-  int i = 1;
+  int i = 0;
 
-  for (list<RepoInfoBase_Ptr>::const_iterator it = services.begin();
-       it != services.end(); ++it)
+  bool show_enabled_only = zypper.cOpts().count("show-enabled-only");
+
+  for_( it, services.begin(), services.end() )
   {
-    service_list_tr(zypper, tbl, *it, i, flags);
+    ++i; // continuous numbering including skipped ones
 
-    // print also repos belonging to the service
+    bool servicePrinted = false;
+    // Unconditionally print the service before the 1st repo is
+    // printed. Undesired, but possible, that a disabled service
+    // owns (manually) enabled repos.
     if (with_repos && dynamic_pointer_cast<ServiceInfo>(*it))
     {
-      // indicate that we print repos of the current service
-      flags |= SF_SERVICE_REPO;
-
       RepoCollector collector;
       RepoManager & rm = zypper.repoManager();
 
@@ -2487,12 +2514,28 @@ static void print_service_list(Zypper & zypper,
       for_(repoit, collector.repos.begin(), collector.repos.end())
       {
         RepoInfoBase_Ptr ptr(new RepoInfo(*repoit));
-        service_list_tr(zypper, tbl, ptr, i, flags);
-      }
-      flags &= ~SF_SERVICE_REPO;
-    }
 
-    ++i;
+	if ( show_enabled_only && !repoit->enabled() )
+	  continue;
+
+	if ( !servicePrinted )
+	{
+	  service_list_tr(zypper, tbl, *it, i, flags);
+	  servicePrinted = true;
+	}
+	// SF_SERVICE_REPO: we print repos of the current service
+        service_list_tr(zypper, tbl, ptr, i, flags|SF_SERVICE_REPO);
+      }
+    }
+    if ( servicePrinted )
+      continue;
+
+    // Here: No repo enforced printing the service, so do so if
+    // necessary.
+    if ( show_enabled_only && !(*it)->enabled() )
+      continue;
+
+    service_list_tr(zypper, tbl, *it, i, flags);
   }
 
   if (tbl.empty())
@@ -2548,12 +2591,12 @@ static void print_xml_service_list(Zypper & zypper,
               bind(&RepoCollector::collect, &collector, _1)));
       ostringstream sout;
       for_(repoit, collector.repos.begin(), collector.repos.end())
-        repoit->dumpAsXMLOn(sout);
-      (*it)->dumpAsXMLOn(cout, sout.str());
+        repoit->dumpAsXmlOn(sout);
+      (*it)->dumpAsXmlOn(cout, sout.str());
       continue;
     }
 
-    (*it)->dumpAsXMLOn(cout);
+    (*it)->dumpAsXmlOn(cout);
   }
 
   cout << "</service-list>" << endl;
@@ -2639,8 +2682,7 @@ void add_service(Zypper & zypper, const ServiceInfo & service)
   }
 
   zypper.out().info(boost::str(
-    format(_("Service '%s' has been successfully added."))
-      % (zypper.config().show_alias ? service.alias() : service.name())));
+    format(_("Service '%s' has been successfully added.")) % service.asUserString()));
   MIL << format("Service '%s' has been added.") % service.alias() << endl;
 }
 
@@ -2679,12 +2721,10 @@ void remove_service(Zypper & zypper, const ServiceInfo & service)
   RepoManager & manager = zypper.repoManager();
 
   zypper.out().info(boost::str(
-    format(_("Removing service '%s':"))
-      % (zypper.config().show_alias ? service.alias() : service.name())));
+    format(_("Removing service '%s':")) % service.asUserString()));
   manager.removeService(service);
   zypper.out().info(boost::str(
-    format(_("Service '%s' has been removed."))
-      % (zypper.config().show_alias ? service.alias() : service.name())));
+    format(_("Service '%s' has been removed.")) % service.asUserString()));
   MIL << format("Service '%s' has been removed.") % service.alias() << endl;
 }
 
@@ -2700,32 +2740,31 @@ static bool refresh_service(Zypper & zypper, const ServiceInfo & service)
   try
   {
     zypper.out().info(
-        str::form(_("Refreshing service '%s'."),
-          (zypper.config().show_alias ? service.alias().c_str() : service.name().c_str())));
-    manager.refreshService(service);
+        str::form(_("Refreshing service '%s'."), service.asUserString().c_str()));
+
+    RepoManager::RefreshServiceOptions opts;
+    if ( zypper.cOpts().count("restore-status") )
+      opts |= RepoManager::RefreshService_restoreStatus;
+    
+    manager.refreshService( service, opts );
     error = false;
   }
   catch ( const repo::ServicePluginInformalException & e )
   {
     ZYPP_CAUGHT(e);
-    zypper.out().error(e,
-      str::form(
-        _("Problem retrieving the repository index file for service '%s':"),
-         (zypper.config().show_alias ? service.alias().c_str() : service.name().c_str())),
-      str::form(
-        _("Skipping service '%s' because of the above error."),
-	 (zypper.config().show_alias ? service.alias().c_str() : service.name().c_str())));
+    zypper.out().error(e, str::form(
+        _("Problem retrieving the repository index file for service '%s':"), service.asUserString().c_str()));
+    zypper.out().warning( str::form(
+        _("Skipping service '%s' because of the above error."), service.asUserString().c_str()));
     // this is just an informal note. The service will be used as is (usually empty)
     error = false;
   }
   catch (const MediaException & e)
   {
     ZYPP_CAUGHT(e);
-    zypper.out().error(e,
-      str::form(
-        _("Problem retrieving the repository index file for service '%s':"),
-         (zypper.config().show_alias ? service.alias().c_str() : service.name().c_str())),
-      _("Check if the URI is valid and accessible."));
+    zypper.out().error(e, str::form(
+        _("Problem retrieving the repository index file for service '%s':"), service.asUserString().c_str()),
+        _("Check if the URI is valid and accessible."));
     zypper.setExitCode(ZYPPER_EXIT_ERR_ZYPP);
   }
 
@@ -2783,8 +2822,7 @@ void refresh_services(Zypper & zypper)
       if (!service_ptr->enabled())
       {
         string msg = boost::str(
-          format(_("Skipping disabled service '%s'"))
-            % (zypper.config().show_alias ? service_ptr->alias() : service_ptr->name()));
+          format(_("Skipping disabled service '%s'")) % service_ptr->asUserString());
         DBG << "skipping disabled service '" << service_ptr->alias() << "'" << endl;
 
         if (specified.empty())
@@ -2821,7 +2859,7 @@ void refresh_services(Zypper & zypper)
         {
           DBG << str::form(
               "Skipping non-index service '%s' because '%s' is used.",
-              zypper.config().show_alias ? service_ptr->alias().c_str() : service_ptr->name().c_str(), "--no-repos");
+              service_ptr->asUserString().c_str(), "--no-repos");
           continue;
         }
         error = refresh_repo(zypper, *dynamic_pointer_cast<RepoInfo>(service_ptr));
@@ -2830,8 +2868,7 @@ void refresh_services(Zypper & zypper)
       if (error)
       {
         zypper.out().error(boost::str(format(
-          _("Skipping service '%s' because of the above error."))
-            % (zypper.config().show_alias ? service_ptr->alias().c_str() : service_ptr->name().c_str())));
+          _("Skipping service '%s' because of the above error.")) % service_ptr->asUserString().c_str()));
         ERR << format("Skipping service '%s' because of the above error.")
             % service_ptr->alias() << endl;
         ++error_count;
@@ -3151,6 +3188,7 @@ void load_resolvables(Zypper & zypper)
   if (!zypper.globalOpts().disable_system_resolvables)
     load_target_resolvables(zypper);
 
+
   done = true;
   MIL << "Done loading resolvables" << endl;
 }
@@ -3190,28 +3228,25 @@ void load_repo_resolvables(Zypper & zypper)
 
       if (!error && !manager.isCached(repo))
       {
-        zypper.out().info(boost::str(
-          format(_("Repository '%s' not cached. Caching...")) % repo.name()));
+        zypper.out().info(boost::str(format(
+	  _("Repository '%s' not cached. Caching...")) % repo.name()));
         error = build_cache(zypper, repo, false);
       }
 
       if (error)
       {
         zypper.out().error(boost::str(format(
-        _("Problem loading data from '%s'"))
-        % (zypper.config().show_alias ? repo.alias() : repo.name())));
+	  _("Problem loading data from '%s'")) % repo.asUserString()));
 
         if (geteuid() != 0 && !zypper.globalOpts().changedRoot && manager.isCached(repo))
         {
           zypper.out().warning(boost::str(format(
-            _("Repository '%s' could not be refreshed. Using old cache."))
-            % (zypper.config().show_alias ? repo.alias() : repo.name())));
+            _("Repository '%s' could not be refreshed. Using old cache.")) % repo.asUserString()));
         }
         else
         {
           zypper.out().error(boost::str(format(
-          _("Resolvables from '%s' not loaded because of error."))
-          % (zypper.config().show_alias ? repo.alias() : repo.name())));
+	    _("Resolvables from '%s' not loaded because of error.")) % repo.asUserString()));
           continue;
         }
       }
@@ -3230,26 +3265,21 @@ void load_repo_resolvables(Zypper & zypper)
       {
 
        zypper.out().warning(boost::str(format(
-              _("Repository '%s' appears to outdated. Consider using a different mirror or server."))
-              % (zypper.config().show_alias ? repo.alias() : repo.name())), Out::QUIET);
-          WAR << format("Repository '%s' seems to be outdated")
-              % repo.alias() << endl;
+	 _("Repository '%s' appears to be outdated. Consider using a different mirror or server.")) % repo.asUserString()), Out::QUIET);
+       WAR << format("Repository '%s' seems to be outdated") % repo.alias() << endl;
 
       }
     }
     catch (const Exception & e)
     {
       ZYPP_CAUGHT(e);
-      zypper.out().error(e,
-          boost::str(format(_("Problem loading data from '%s'"))
-              % (zypper.config().show_alias ? repo.alias() : repo.name())),
-          // translators: the first %s is 'zypper refresh' and the second 'zypper clean -m'
-          boost::str(format(_("Try '%s', or even '%s' before doing so."))
-            % "zypper refresh" % "zypper clean -m")
+      zypper.out().error(e, boost::str(format(
+	_("Problem loading data from '%s'")) % repo.asUserString()),
+	// translators: the first %s is 'zypper refresh' and the second 'zypper clean -m'
+	boost::str(format(_("Try '%s', or even '%s' before doing so.")) % "zypper refresh" % "zypper clean -m")
       );
       zypper.out().info(boost::str(format(
-        _("Resolvables from '%s' not loaded because of error."))
-          % (zypper.config().show_alias ? repo.alias() : repo.name())));
+	_("Resolvables from '%s' not loaded because of error.")) % repo.asUserString()));
     }
   }
 }

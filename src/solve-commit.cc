@@ -448,8 +448,8 @@ static void notify_processes_using_deleted_files(Zypper & zypper)
   if (checker.size() > 1 || (checker.size() == 1 && checker.begin()->pid != zypp::str::numstring(::getpid())))
   {
     zypper.out().info(str::form(
-        _("There are some running programs that use files deleted by recent upgrade."
-          " You may wish to restart some of them. Run '%s' to list these programs."),
+        _("There are some running programs that might use files deleted by recent upgrade."
+          " You may wish to check and restart some of them. Run '%s' to list these programs."),
         "zypper ps"));
   }
 }
@@ -559,7 +559,9 @@ void solve_and_commit (Zypper & zypper)
 
     Summary summary(God->pool());
 
-    if (zypper.out().verbosity() == Out::HIGH)
+    if ( zypper.cOpts().count("details") )
+      summary.setViewOption(Summary::DETAILS);
+    else if (zypper.out().verbosity() == Out::HIGH)
       summary.setViewOption(Summary::SHOW_VERSION);
     else if (zypper.out().verbosity() == Out::DEBUG)
       summary.setViewOption(Summary::SHOW_ALL);
@@ -583,8 +585,6 @@ void solve_and_commit (Zypper & zypper)
       summary.setViewOption(Summary::SHOW_UNSUPPORTED);
     else
       summary.unsetViewOption(Summary::SHOW_UNSUPPORTED);
-
-    summary.setShowRepoAlias(zypper.config().show_alias);
 
     if (get_download_option(zypper, true) == DownloadOnly)
       summary.setDownloadOnly(true);
@@ -876,10 +876,13 @@ void solve_and_commit (Zypper & zypper)
         }
 
         // check for running services (fate #300763)
-        if (summary.packagesToRemove() ||
-            summary.packagesToUpgrade() ||
-            summary.packagesToDowngrade())
+        if ( zypper.cOpts().find("download-only") == zypper.cOpts().end()
+	  && ( summary.packagesToRemove()
+	    || summary.packagesToUpgrade()
+	    || summary.packagesToDowngrade() ) )
+	{
           notify_processes_using_deleted_files(zypper);
+	}
       }
     }
     // noting to do

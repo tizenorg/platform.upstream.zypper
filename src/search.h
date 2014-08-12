@@ -27,7 +27,6 @@ struct FillSearchTableSolvable
   /** Aliases of repos specified as --repo */
   std::set<std::string> _repos;
   zypp::TriBool _inst_notinst;
-  bool _show_alias;
 
   FillSearchTableSolvable(
       Table & table,
@@ -43,11 +42,12 @@ struct FillSearchTableSolvable
   bool operator()( const zypp::PoolQuery::const_iterator & it ) const;
 
   /** Helper to add a table row for \a sel's picklist item \c pi
+   * \return whether a row was actually added.
    * \note picklist item means that \a pi must not be an installed
    * item in \a sel, if there is an identical available one. The
    * code relies on this.
    */
-  void addPicklistItem( const zypp::ui::Selectable::constPtr & sel, const zypp::PoolItem & pi ) const;
+  bool addPicklistItem( const zypp::ui::Selectable::constPtr & sel, const zypp::PoolItem & pi ) const;
 };
 
 struct FillSearchTableSelectable
@@ -75,7 +75,6 @@ struct FillPatchesTable
   Table * _table;
   const GlobalOptions & _gopts;
   zypp::TriBool _inst_notinst;
-  bool _show_alias;
 
   FillPatchesTable( Table & table,
       zypp::TriBool inst_notinst = zypp::indeterminate );

@@ -130,8 +130,7 @@ string ConfigOption::asString() const
 
 
 Config::Config()
-  : show_alias(false)
-  , repo_list_columns("anr")
+  : repo_list_columns("anr")
   , solver_installRecommends(!ZConfig::instance().solver_onlyRequires())
   , do_colors        (false)
   , color_useColors  ("never")
@@ -139,7 +138,7 @@ Config::Config()
   , color_result     ("white")  // default colors for dark background
   , color_msgStatus  ("grey")   // if background is actually light, these
   , color_msgError   ("red")    // colors will be overwritten in read()
-  , color_msgWarning ("yellow")
+  , color_msgWarning ("purple")
   , color_positive   ("green")
   , color_negative   ("red")
   , color_highlight  ("cyan")
@@ -164,8 +163,8 @@ void Config::read(const string & file)
     s = augeas.getOption(ConfigOption::MAIN_SHOW_ALIAS.asString());
     if (!s.empty())
     {
-      show_alias = str::strToBool(s, false);
-      ZConfig::instance().repoLabelIsAlias(show_alias);
+      // using Repository::asUserString() will follow repoLabelIsAlias!
+      ZConfig::instance().repoLabelIsAlias( str::strToBool(s, false) );
     }
 
     s = augeas.getOption(ConfigOption::MAIN_REPO_LIST_COLUMNS.asString());
@@ -228,7 +227,7 @@ void Config::read(const string & file)
     {
       // set a default for light background
       if (color_background)
-        color_msgStatus = Color("default");
+        color_msgStatus = Color("black");
     }
     else
       color_msgStatus = c;
@@ -242,13 +241,7 @@ void Config::read(const string & file)
     ////// color/colorMsgWarning //////
 
     c = Color(augeas.getOption(ConfigOption::COLOR_MSG_WARNING.asString()));
-    if (c.value().empty())
-    {
-      // set a default for light background
-      if (color_background)
-        color_msgWarning = Color("brown");
-    }
-    else
+    if (!c.value().empty())
       color_msgWarning = c;
 
     ////// color/colorPositive //////

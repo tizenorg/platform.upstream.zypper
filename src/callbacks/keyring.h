@@ -18,11 +18,37 @@
 #include <zypp/KeyRing.h>
 #include <zypp/Digest.h>
 
-#include "utils/prompt.h"
+#include "Zypper.h"
+#include "Table.h"
 
 ///////////////////////////////////////////////////////////////////
 namespace zypp
 { /////////////////////////////////////////////////////////////////
+
+  ///////////////////////////////////////////////////////////////////
+  namespace
+  {
+    std::ostream & dumpKeyInfo( std::ostream & str, const PublicKeyData & key, const KeyContext & context = KeyContext() )
+    {
+      Table t;
+      t.lineStyle( none );
+      if ( !context.empty() )
+      {
+	t << ( TableRow() << "" << _("Repository:") << context.repoInfo().asUserString() );
+      }
+      t << ( TableRow() << "" << _("Key Name:") << key.name() )
+	<< ( TableRow() << "" << _("Key Fingerprint:") << str::gapify( key.fingerprint(), 8 ) )
+	<< ( TableRow() << "" << _("Key Created:") << key.created() )
+	<< ( TableRow() << "" << _("Key Expires:") << key.expiresAsString() )
+	<< ( TableRow() << "" << _("Rpm Name:") << (boost::format( "gpg-pubkey-%1%-%2%" ) % key.gpgPubkeyVersion() % key.gpgPubkeyRelease()).str() );
+
+      return str << t;
+    }
+
+    inline std::ostream & dumpKeyInfo( std::ostream & str, const PublicKey & key, const KeyContext & context = KeyContext() )
+    { return dumpKeyInfo( str, key.keyData(), context ); }
+  } // namespace
+  ///////////////////////////////////////////////////////////////////
 
     ///////////////////////////////////////////////////////////////////
     // KeyRingReceive
@@ -32,11 +58,32 @@ namespace zypp
     {
       KeyRingReceive()
           : _gopts(Zypper::instance()->globalOpts())
-          , _show_alias(Zypper::instance()->config().show_alias)
           {}
 
       ////////////////////////////////////////////////////////////////////
 
+      virtual void infoVerify( const std::string & file_r, const PublicKeyData & keyData_r, const KeyContext & context = KeyContext() )
+      {
+	if ( keyData_r.expired() )
+	{
+	  Zypper::instance()->out().warning( boost::format(_("The gpg key signing file '%1%' has expired.")) % file_r );
+	  dumpKeyInfo( colNote(), keyData_r, context );
+	}
+	else if ( keyData_r.daysToLive() < 15 )
+	{
+	  Zypper::instance()->out().info( boost::format(
+	    _PL( "The gpg key signing file '%1%' will expire in %2% day.",
+		 "The gpg key signing file '%1%' will expire in %2% days.",
+		 keyData_r.daysToLive() )) % file_r %  keyData_r.daysToLive() );
+	  dumpKeyInfo( std::cout, keyData_r, context );
+	}
+	else if ( Zypper::instance()->out().verbosity() > Out::NORMAL )
+	{
+	  dumpKeyInfo( std::cout, keyData_r, context );
+	}
+      }
+
+      ////////////////////////////////////////////////////////////////////
       virtual bool askUserToAcceptUnsignedFile(
           const std::string & file, const KeyContext & context)
       {
@@ -53,7 +100,7 @@ namespace zypp
           else
             Zypper::instance()->out().warning(boost::str(
               boost::format(_("Accepting an unsigned file '%s' from repository '%s'."))
-                % file % (_show_alias ? context.repoInfo().alias() : context.repoInfo().name())),
+                % file % context.repoInfo().asUserString() ),
               Out::HIGH);
 
           return true;
@@ -68,7 +115,7 @@ namespace zypp
           question = boost::str(boost::format(
             // TranslatorExplanation: speaking of a file
             _("File '%s' from repository '%s' is unsigned, continue?"))
-            % file % (_show_alias ? context.repoInfo().alias() : context.repoInfo().name()));
+            % file % context.repoInfo().asUserString() );
 
         return read_bool_answer(PROMPT_YN_GPG_UNSIGNED_FILE_ACCEPT, question, false);
       }
@@ -95,7 +142,7 @@ namespace zypp
           else
             Zypper::instance()->out().warning(boost::str(boost::format(
                 _("Accepting file '%s' from repository '%s' signed with an unknown key '%s'."))
-                % file % (_show_alias ? context.repoInfo().alias() : context.repoInfo().name()) % id));
+                % file % context.repoInfo().asUserString() % id));
 
           return true;
         }
@@ -109,7 +156,7 @@ namespace zypp
           question = boost::str(boost::format(
             // translators: the last %s is gpg key ID
             _("File '%s' from repository '%s' is signed with an unknown key '%s'. Continue?"))
-             % file % (_show_alias ? context.repoInfo().alias() : context.repoInfo().name()) % id);
+             % file % context.repoInfo().asUserString() % id);
 
         return read_bool_answer(PROMPT_YN_GPG_UNKNOWN_KEY_ACCEPT, question, false);
       }
@@ -121,8 +168,6 @@ namespace zypp
       {
         Zypper & zypper = *Zypper::instance();
         std::ostringstream s;
-	const std::string & keyid = key.id(), keyname = key.name(),
-	  fingerprint = key.fingerprint();
 
 	s << std::endl;
 	if (_gopts.gpg_auto_import_keys)
@@ -133,30 +178,18 @@ namespace zypp
           s << _("New repository or package signing key received:") << std::endl;
 
         // gpg key info
-        s
-          << str::form(_("Key ID: %s"), keyid.c_str()) << std::endl
-          << str::form(_("Key Name: %s"), keyname.c_str()) << std::endl
-          << str::form(_("Key Fingerprint: %s"), fingerprint.c_str()) << std::endl
-          << str::form(_("Key Created: %s"), key.created().asString().c_str()) << std::endl
-          << str::form(_("Key Expires: %s"), key.expiresAsString().c_str()) << std::endl;
-        if (!context.empty())
-          s << str::form(_("Repository: %s"), _show_alias ?
-              context.repoInfo().alias().c_str() :
-              context.repoInfo().name().c_str())
-            << std::endl;
+        dumpKeyInfo( s << std::endl, key, context )  << std::endl;
 
         // if --gpg-auto-import-keys or --no-gpg-checks print info and don't ask
         if (_gopts.gpg_auto_import_keys)
         {
-          MIL << boost::format("Automatically importing key id '%s', '%s', fingerprint '%s'")
-              % keyid % keyname % fingerprint << std::endl;
+          MIL << "Automatically importing key " << key << std::endl;
           zypper.out().info(s.str());
           return KeyRingReport::KEY_TRUST_AND_IMPORT;
         }
         else if (_gopts.no_gpg_checks)
         {
-          MIL << boost::format("Automatically trusting key id '%s', '%s', fingerprint '%s'")
-              % keyid % keyname % fingerprint << std::endl;
+          MIL << "Automatically trusting key " << key << std::endl;
           zypper.out().info(s.str());
           return KeyRingReport::KEY_TRUST_TEMPORARILY;
         }
@@ -227,7 +260,7 @@ namespace zypp
             msg << boost::format(
                 _("Ignoring failed signature verification for file '%s'"
                   " from repository '%s'!")) % file
-                  % (_show_alias ? context.repoInfo().alias() : context.repoInfo().name());
+                  % context.repoInfo().asUserString();
 
           msg
             << std::endl
@@ -245,7 +278,7 @@ namespace zypp
         else
           question << boost::format(
             _("Signature verification failed for file '%s' from repository '%s'."))
-              % file % (_show_alias ? context.repoInfo().alias() : context.repoInfo().name());
+              % file % context.repoInfo().asUserString();
 
         question
           << std::endl
@@ -258,7 +291,6 @@ namespace zypp
 
     private:
       const GlobalOptions & _gopts;
-      bool _show_alias;
     };
 
     ///////////////////////////////////////////////////////////////////

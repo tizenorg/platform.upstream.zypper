@@ -1,6 +1,7 @@
+#
 # spec file for package zypper
 #
-# Copyright (c) 2006-2011 SUSE LINUX Products GmbH, Nuernberg, Germany.
+# Copyright (c) 2006-2013 SUSE LINUX Products GmbH, Nuernberg, Germany.
 #
 # All modifications and additions to the file contributed by third parties
 # remain the property of their copyright owners, unless otherwise agreed
@@ -14,30 +15,29 @@
 # Please submit bugfixes or comments via http://bugs.opensuse.org/
 #
 
-# norootforbuild
 
 Name:           @PACKAGE@
-BuildRequires:  libzypp-devel >= 12.11.0
-BuildRequires:  boost-devel >= 1.33.1
-BuildRequires:  gettext-devel >= 0.15
-BuildRequires:  readline-devel >= 5.1
 BuildRequires:  augeas-devel >= 0.5.0
-BuildRequires:  gcc-c++ >= 4.5
+BuildRequires:  boost-devel >= 1.33.1
 BuildRequires:  cmake >= 2.4.6
+BuildRequires:  gcc-c++ >= 4.7
+BuildRequires:  gettext-devel >= 0.15
+BuildRequires:  libzypp-devel >= 14.27.0
+BuildRequires:  readline-devel >= 5.1
 Requires:       procps
 %if 0%{?suse_version}
 %requires_ge    libzypp
 Recommends:     logrotate cron zypper-log
 %endif
-License:        GPL-2.0+
-Group:          System/Packages
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 Summary:        Command line software manager using libzypp
+License:        GPL-2.0+
+Group:          System/Packages
 Version:        @VERSION@
 Release:        0
 Source:         %{name}-%{version}.tar.bz2
 Source1:        %{name}-rpmlintrc
-URL:            http://en.opensuse.org/Zypper
+Url:            http://en.opensuse.org/Zypper
 Provides:       y2pmsh
 Obsoletes:      y2pmsh
 
@@ -54,6 +54,7 @@ or front-ends.
 Authors:
 --------
     Jan Kupec <jkupec@suse.cz>
+    Michael Andres <ma@suse.de>
     Duncan Mac-Vicar <dmacvicar@suse.de>
     Martin Vidner <mvidner@suse.cz>
     Josef Reidinger <jreidinger@suse.cz>
@@ -65,11 +66,11 @@ Requires:       python-argparse
 %else
 Requires:       python >= 2.7
 %endif
-Requires:	xz
+Requires:       xz
 BuildArch:      noarch
 Summary:        CLI for accessing the zypper logfile
-License:        GPL-2.0+
 Group:          System/Packages
+
 %description -n zypper-log
 CLI for accessing the zypper logfile
 
@@ -79,13 +80,13 @@ Authors:
 
 %package aptitude
 Summary:        aptitude compatibility with zypper
-License:        GPL-2.0+
+Group:          System/Packages
 Requires:       perl
 %if 0%{?suse_version}
 Supplements:    zypper
 %endif
 BuildArch:      noarch
-Group:          System/Packages
+
 %description aptitude
 provides aptitude compatibility using zypper
 
@@ -128,6 +129,9 @@ cd build
 make install DESTDIR=$RPM_BUILD_ROOT
 make -C po install DESTDIR=$RPM_BUILD_ROOT
 
+# yzpper symlink
+ln -s zypper $RPM_BUILD_ROOT%{_bindir}/yzpper
+
 # Create filelist with translations
 cd ..
 %{find_lang} zypper
@@ -144,6 +148,7 @@ rm -rf "$RPM_BUILD_ROOT"
 %config(noreplace) %{_sysconfdir}/logrotate.d/zypp-refresh.lr
 %{_sysconfdir}/bash_completion.d/zypper.sh
 %{_bindir}/zypper
+%{_bindir}/yzpper
 %{_bindir}/installation_sources
 %{_sbindir}/zypp-refresh
 %dir %{_datadir}/zypper
@@ -152,13 +157,11 @@ rm -rf "$RPM_BUILD_ROOT"
 %{_datadir}/zypper/xml/xmlout.rnc
 %doc %{_mandir}/man8/zypper.8*
 %doc %dir %{_datadir}/doc/packages/zypper
-%doc %{_datadir}/doc/packages/zypper/TODO
-%doc %{_datadir}/doc/packages/zypper/zypper-rug
 %doc %{_datadir}/doc/packages/zypper/COPYING
 %doc %{_datadir}/doc/packages/zypper/HACKING
 # declare ownership of the log file but prevent
 # it from being erased by rpm -e
-%ghost %config(noreplace) %{_var}/log/zypper.log
+%ghost %config(noreplace) %attr (640,root,root) %{_var}/log/zypper.log
 
 %files log
 %defattr(-,root,root)

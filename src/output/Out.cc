@@ -20,7 +20,7 @@ std::string TermLine::get( unsigned width_r, SplitFlags flags_r, char exp_r ) co
   utf8::string l(lhs);
   utf8::string r(rhs);
 
-  if ( width_r == 0 )
+  if ( width_r == out::termwidthUnlimited )
     return zypp::str::Str() << l << r;	// plain string if zero width
 
   unsigned llen( l.size() - lhidden );
@@ -46,7 +46,8 @@ std::string TermLine::get( unsigned width_r, SplitFlags flags_r, char exp_r ) co
     if ( percentHint == 0 )
       return zypp::str::Str() << l << std::string( diff, '-' ) << r;
 
-    int pc = diff * percentHint / 100;
+
+    unsigned pc = diff * percentHint / 100; // diff > 0 && percentHint > 0
     if ( diff < 6 )	// not enough space for fancy stuff
       return zypp::str::Str() << l <<  std::string( pc, '.' ) << std::string( diff-pc, '=' ) << r;
 
@@ -81,12 +82,15 @@ std::string TermLine::get( unsigned width_r, SplitFlags flags_r, char exp_r ) co
 //	class Out
 ////////////////////////////////////////////////////////////////////////////////
 
+constexpr Out::Type Out::TYPE_NONE;
+constexpr Out::Type Out::TYPE_ALL;
+
 Out::~Out()
 {}
 
 bool Out::progressFilter()
 {
-  if (this->verbosity() < Out::NORMAL)
+  if (verbosity() < Out::NORMAL)
       return true;
   return false;
 }
@@ -100,7 +104,7 @@ std::string Out::zyppExceptionReport(const zypp::Exception & e)
   //    - top level error   |<- Exception::historyAsString()
   //    - mid level error   |
   //    - first error      -+
-  if (this->verbosity() > Out::NORMAL)
+  if (verbosity() > Out::NORMAL)
     s << e.asUserHistory();
   else
     s << e.asUserString();

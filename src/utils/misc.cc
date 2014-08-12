@@ -14,7 +14,6 @@
 #include <zypp/base/Easy.h>
 #include <zypp/base/Regex.h>
 #include <zypp/media/MediaManager.h>
-#include <zypp/parser/xml/XmlEscape.h>
 #include <zypp/misc/CheckAccessDeleted.h>
 #include <zypp/ExternalProgram.h>
 
@@ -70,6 +69,8 @@ ResKind string_to_kind (const string & skind)
     return ResKind::patch;
   if (lskind == "srcpackage")
     return ResKind::srcpackage;
+  if (lskind == "application")
+    return ResKind::application;
   // not recognized
   return empty;
 }
@@ -104,6 +105,8 @@ string kind_to_string_localized(const zypp::ResKind & kind, unsigned long count)
     return _PL("patch", "patches", count);
   if (kind == ResKind::srcpackage)
     return _PL("srcpackage", "srcpackages", count);
+  if (kind == ResKind::application)
+    return _PL("application", "applications", count);
   // default
   return _PL("resolvable", "resolvables", count);
 }
@@ -126,7 +129,7 @@ string string_patch_status(const PoolItem & pi)
     return "";
   }
 
-  return _("Not Applicable"); //! \todo make this "Not Needed" after 11.0
+  return _("Not Needed");
 }
 
 // ----------------------------------------------------------------------------
@@ -318,11 +321,6 @@ Pathname cache_rpm(const string & rpm_uri_str, const string & cache_dir)
   return Pathname();
 }
 
-string xml_encode(const string & text)
-{
-  return zypp::xml::escape(text);
-}
-
 std::string & indent(std::string & text, int columns)
 {
   string indent(columns, ' '); indent.insert(0, 1, '\n');
@@ -339,52 +337,62 @@ std::string & indent(std::string & text, int columns)
 string asXML(const Product & p, bool is_installed)
 {
   ostringstream str;
-  str
-    << "<product"
-       " name=\"" << xml_encode(p.name()) << "\""
-       " version=\"" << p.edition().version() << "\""
-       " release=\"" << p.edition().release() << "\""
-       " epoch=\"" << p.edition().epoch() << "\""
-       " arch=\"" << p.arch() << "\""
-       " productline=\"" << p.productLine() << "\""
-       " registerrelease=\"" << xml_encode(p.registerRelease()) << "\""
-       " vendor=\"" << xml_encode(p.vendor()) << "\""
-       " summary=\"" << xml_encode(p.summary()) << "\""
-       " shortname=\"" << xml_encode(p.shortName()) << "\""
-       " flavor=\"" << xml_encode(p.flavor()) << "\""
-       " isbase=\"" << (p.isTargetDistribution() ? 1 : 0) << "\""
-       " repo=\"" << xml_encode(p.repoInfo().alias()) << "\""
-       " installed=\"" << (is_installed ? 1 : 0) << "\"";
-  if (p.description().empty())
-    str << "/>";
-  else
-    str
-      << ">" << endl << "<description>" << p.description() << "</description>"
-      << endl << "</product>";
+  {
+    // Legacy: Encoded almost everything as attribute
+    // Think about using subnodes for new stuff.
+    xmlout::Node parent( str, "product", xmlout::Node::optionalContent, {
+      { "name", 	p.name() },
+      { "version",	p.edition().version() },
+      { "release",	p.edition().release() },
+      { "epoch",	p.edition().epoch() },
+      { "arch",		p.arch() },
+      { "vendor",	p.vendor() },
+      { "summary",	p.summary() },
+      { "repo",		p.repoInfo().alias() },
+      // ^^^ common --- specific vvv
+      { "productline",	p.productLine() },
+      { "registerrelease",p.registerRelease() },
+      { "shortname",	p.shortName() },
+      { "flavor",	p.flavor() },
+      { "isbase",	p.isTargetDistribution() },
+      { "installed",	is_installed },
+    } );
+
+    dumpAsXmlOn( *parent, p.endOfLife(), "endoflife" );
+    {
+      const std::string & text( p.description() );
+      if ( ! text.empty() )
+	*xmlout::Node( *parent, "description" ) << xml::escape( text );
+    }
+  }
   return str.str();
 }
 
 string asXML(const Pattern & p, bool is_installed)
 {
   ostringstream str;
-  str
-    << "<pattern"
-       " name=\"" << xml_encode(p.name()) << "\""
-       " version=\"" << p.edition().version() << "\""
-       " release=\"" << p.edition().release() << "\""
-       " epoch=\"" << p.edition().epoch() << "\""
-       " arch=\"" << p.arch() << "\""
-       " vendor=\"" << xml_encode(p.vendor()) << "\""
-       " summary=\"" << xml_encode(p.summary()) << "\""
-       " repo=\"" << xml_encode(p.repoInfo().alias()) << "\""
-       " installed=\"" << (is_installed ? 1 : 0) << "\""
-       " uservisible=\"" << (p.userVisible() ? 1 : 0) << "\"";
-  if (p.description().empty())
-    str << "/>";
-  else
-    str
-      << ">" << endl << "<description>" << p.description() << "</description>"
-      << endl << "</pattern>";
+  {
+    // Legacy: Encoded almost everything as attribute
+    // Think about using subnodes for new stuff.
+    xmlout::Node parent( str, "pattern", xmlout::Node::optionalContent, {
+      { "name",		p.name() },
+      { "version",	p.edition().version() },
+      { "release",	p.edition().release() },
+      { "epoch",	p.edition().epoch() },
+      { "arch",		p.arch() },
+      { "vendor",	p.vendor() },
+      { "summary",	p.summary() },
+      { "repo",		p.repoInfo().alias() },
+      // ^^^ common --- specific vvv
+      { "installed",	is_installed },
+      { "uservisible",	p.userVisible() },
+    } );
+    {
+      const std::string & text( p.description() );
+      if ( ! text.empty() )
+	*xmlout::Node( *parent, "description" ) << xml::escape( text );
+    }
+  }
   return str.str();
 }
 

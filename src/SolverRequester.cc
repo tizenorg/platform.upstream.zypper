@@ -131,10 +131,6 @@ void SolverRequester::installRemove(const PackageArgs & args)
  */
 void SolverRequester::install(const PackageSpec & pkg)
 {
-  sat::Solvable::SplitIdent splid(pkg.parsed_cap.detail().name());
-  ResKind capkind = splid.kind();
-  string capname = splid.name().asString();
-
   // first try by name
 
   if (!_opts.force_by_cap)
@@ -149,6 +145,7 @@ void SolverRequester::install(const PackageSpec & pkg)
     PoolItemBest bestMatches(q.begin(), q.end());
     if (!bestMatches.empty())
     {
+      unsigned notInstalled = 0;
       for_(sit, bestMatches.begin(), bestMatches.end())
       {
         Selectable::Ptr s(asSelectable()(*sit));
@@ -197,8 +194,17 @@ void SolverRequester::install(const PackageSpec & pkg)
             MIL << "installing " << *sit << endl;
           }
           else
-            addFeedback(Feedback::NOT_INSTALLED, pkg);
+	  {
+	    ++notInstalled;
+            // addFeedback(Feedback::NOT_INSTALLED, pkg);
+	    // delay Feedback::NOT_INSTALLED until we know
+	    // there is not a single match installed.
+	  }
         }
+      }
+      if ( notInstalled == bestMatches.size() )
+      {
+	addFeedback(Feedback::NOT_INSTALLED, pkg);
       }
       return;
     }
@@ -247,10 +253,6 @@ void SolverRequester::install(const PackageSpec & pkg)
  */
 void SolverRequester::remove(const PackageSpec & pkg)
 {
-  sat::Solvable::SplitIdent splid(pkg.parsed_cap.detail().name());
-  ResKind capkind = splid.kind();
-  string capname = splid.name().asString();
-
   // first try by name
 
   if (!_opts.force_by_cap)
@@ -417,7 +419,7 @@ bool SolverRequester::installPatch(
         addFeedback(Feedback::PATCH_UNWANTED, patchspec, selected, selected);
       }
 
-      else if (!_opts.category.empty() && _opts.category != patch->category())
+      else if ( ! ( _opts.category.empty() || patch->isCategory( _opts.category ) ) )
       {
 	DBG << "candidate patch " << patch << " is not in the specified category" << endl;
 	addFeedback(Feedback::PATCH_WRONG_CAT, patchspec, selected, selected);
