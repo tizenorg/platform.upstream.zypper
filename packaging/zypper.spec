@@ -1,5 +1,5 @@
 Name:           zypper
-BuildRequires:  libzypp-devel >= 12.1.0
+BuildRequires:  libzypp-devel >= 14.27.0
 BuildRequires:  boost-devel >= 1.33.1
 BuildRequires:  gettext-devel >= 0.15
 BuildRequires:  readline-devel >= 5.1
